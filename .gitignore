@@ -43,7 +43,9 @@ mlruns/
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
+logs/
 dbt/profiles.yml
+dbt/.user.yml
 .dbt/
 
 # ── preview artifacts (keep only docs/preview/*.png) ───────

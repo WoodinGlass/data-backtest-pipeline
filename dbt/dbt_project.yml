@@ -1,0 +1,53 @@
+name: 'data_backtest_pipeline'
+version: '1.0.0'
+config-version: 2
+
+# Must match a profile name in profiles.yml
+profile: 'data_backtest_pipeline'
+
+# Directory layout (relative to this file's directory)
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+
+# ── Model materialization ───────────────────────────────────
+# Views for staging/intermediate: cheap, always reflect raw layer.
+# Tables for marts: query performance, stable for downstream app.
+models:
+  data_backtest_pipeline:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: marts
+
+# ── Seeds ───────────────────────────────────────────────────
+seeds:
+  data_backtest_pipeline:
+    +schema: seeds
+
+# ── Vars ────────────────────────────────────────────────────
+# Central place for tunable parameters. Referenced from models
+# via {{ var('...') }} so nothing is hardcoded in SQL.
+vars:
+  # Raw Parquet location (relative to CWD when dbt runs, i.e. repo root).
+  raw_prices_glob: "data/raw/prices/yfinance/*/*.parquet"
+  # Source freshness thresholds in calendar days. This is a coarse
+  # check — trading-day-aware freshness arrives with M10.
+  freshness_warn_days: 3
+  freshness_error_days: 7
+  # Benchmark ticker used for cross-sectional features and backtest
+  # comparison.
+  benchmark_ticker: "SPY"
