@@ -36,3 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OHLCV prices to 4 decimal places. See
   `docs/adr/0006-content-hash-excludes-adjusted-close.md`.
   (Hash version bumped `raw_store:v2` → `raw_store:v3`.)
+- **Makefile `ingest` target pointed at a library, not a CLI.**
+  The target invoked `python -m ingestion.pipeline`, but that module is
+  a library without a `__main__` guard; `make ingest` was a silent no-op.
+  Now invokes `python -m ingestion.cli` and forwards `START`/`END`
+  arguments. Caught by the full-universe integration run.
+- **Unit tests constructed physically impossible OHLCV frames.**
+  Adding the vectorized validator (`ingestion/validation.py`) made four
+  existing tests fail because they modified `close` without adjusting
+  `high`. Rewritten to modify `volume` instead — still a distinct
+  snapshot, but a valid one.
+
+### Added (post-M1 hardening)
+- `ingestion/validation.py` — vectorized OHLCV validator invoked on
+  every `RawStore.write_snapshot`. Hard-fails on empty input, missing
+  columns, bad index (name/order/duplicates), NaN, non-positive prices,
+  OHLC invariant violations, and negative volume.
+- ADR 0007 documents the two-layer validation design (Pydantic for
+  rows at edges, vectorized for frames in the hot path).
+- Full-universe smoke test verified: 32 tickers, idempotent on rerun.

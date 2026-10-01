@@ -329,11 +329,11 @@ Dependencies live in `pyproject.toml` with self-contained extras: `dev`, `dbt`, 
 
 ## Testing Strategy
 
-| Tier | Scope | Marker |
-|---|---|---|
-| Unit | Pure functions, no external services (default) | none |
-| Integration | Needs DuckDB/Docker/network | `@pytest.mark.integration` |
-| Slow | Long-running backtests | `@pytest.mark.slow` |
+| Tier | Count | Scope | Marker |
+|---|---|---|---|
+| Unit | 99 | Pure functions, no external services (default) | none |
+| Integration | 4 | Needs DuckDB/Docker/network | `@pytest.mark.integration` |
+| Slow | — | Long-running backtests | `@pytest.mark.slow` |
 
 Key tests:
 - **Anti-leakage:** features for date `t` never change when future rows are shuffled.
@@ -421,7 +421,7 @@ Severity policy: schema violation → hard fail; freshness/volume → warning fi
 
 ## Roadmap
 
-- [ ] **M1:** Idempotent ingestion (retry, backoff, immutable raw Parquet layer)
+- [x] **M1:** Idempotent ingestion (retry, backoff, immutable raw Parquet layer)
 - [ ] **M2:** dbt staging + marts with `not_null`, `unique`, `relationships`, source freshness
 - [ ] **M3:** Data quality gate (Pandera); pipeline fails on bad data
 - [ ] **M4:** Point-in-time features with anti-leakage tests

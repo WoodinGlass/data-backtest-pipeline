@@ -58,7 +58,7 @@ def test_snapshot_hash_is_deterministic(sample_df: pd.DataFrame) -> None:
 def test_snapshot_hash_changes_with_data(sample_df: pd.DataFrame) -> None:
     h1 = snapshot_hash(sample_df, source="yfinance", ticker="AAPL")
     modified = sample_df.copy()
-    modified.iloc[0, modified.columns.get_loc("close")] = 999.99
+    modified.iloc[0, modified.columns.get_loc("volume")] = 5000
     h2 = snapshot_hash(modified, source="yfinance", ticker="AAPL")
     assert h1 != h2
 
@@ -114,7 +114,7 @@ def test_write_different_data_creates_new_snapshot(
 ) -> None:
     r1 = store.write_snapshot("AAPL", sample_df)
     modified = sample_df.copy()
-    modified.iloc[0, modified.columns.get_loc("close")] = 999.99
+    modified.iloc[0, modified.columns.get_loc("volume")] = 5000
     r2 = store.write_snapshot("AAPL", modified)
     assert r2.status == "written"
     assert r2.hash != r1.hash
@@ -150,12 +150,12 @@ def test_read_latest_missing_returns_none(store: RawStore) -> None:
 def test_read_latest_returns_newest(store: RawStore, sample_df: pd.DataFrame) -> None:
     store.write_snapshot("AAPL", sample_df)
     modified = sample_df.copy()
-    modified.iloc[0, modified.columns.get_loc("close")] = 999.99
+    modified.iloc[0, modified.columns.get_loc("volume")] = 5000
     store.write_snapshot("AAPL", modified)
 
     latest = store.read_latest("AAPL")
     assert latest is not None
-    assert latest.iloc[0]["close"] == pytest.approx(999.99)
+    assert latest.iloc[0]["volume"] == 5000
 
 
 # ─── list_snapshots / latest_hash ──────────────────────────
@@ -166,7 +166,7 @@ def test_list_snapshots_empty(store: RawStore) -> None:
 def test_list_snapshots_newest_first(store: RawStore, sample_df: pd.DataFrame) -> None:
     store.write_snapshot("AAPL", sample_df)
     modified = sample_df.copy()
-    modified.iloc[0, modified.columns.get_loc("close")] = 999.99
+    modified.iloc[0, modified.columns.get_loc("volume")] = 5000
     store.write_snapshot("AAPL", modified)
 
     history = store.list_snapshots("AAPL")
@@ -180,7 +180,7 @@ def test_latest_hash_matches_most_recent(store: RawStore, sample_df: pd.DataFram
     assert store.latest_hash("AAPL") == r1.hash
 
     modified = sample_df.copy()
-    modified.iloc[0, modified.columns.get_loc("close")] = 999.99
+    modified.iloc[0, modified.columns.get_loc("volume")] = 5000
     r2 = store.write_snapshot("AAPL", modified)
     assert store.latest_hash("AAPL") == r2.hash
 

@@ -25,8 +25,8 @@ test-int:  ## Run integration tests (needs Docker/network)
 test-all:  ## Run all tests with coverage
 	pytest --cov --cov-report=term-missing
 
-ingest:  ## Fetch daily bars into the raw layer
-	python -m ingestion.pipeline
+ingest:  ## Fetch daily bars into the raw layer (START=YYYY-MM-DD END=YYYY-MM-DD)
+	python -m ingestion.cli $(if $(START),--start $(START)) $(if $(END),--end $(END))
 
 dbt-build:  ## Run dbt models and tests
 	dbt build --project-dir dbt --profiles-dir dbt

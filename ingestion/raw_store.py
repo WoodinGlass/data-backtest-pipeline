@@ -55,10 +55,12 @@ import pyarrow.parquet as pq
 
 from ingestion.config import Settings, get_settings
 from ingestion.logging import get_logger
+from ingestion.validation import DataQualityError, validate_ohlcv_frame
 
 __all__ = [
     "HASHED_COLUMNS",
     "MANIFEST_VERSION",
+    "DataQualityError",
     "RawStore",
     "WriteResult",
     "snapshot_hash",
@@ -188,6 +190,7 @@ class RawStore:
             raise ValueError(f"Refusing to write empty snapshot for {ticker}")
 
         ticker = ticker.upper()
+        validate_ohlcv_frame(df, ticker=ticker)
         source = self.settings.price_source
 
         h = snapshot_hash(df, source=source, ticker=ticker)
