@@ -108,9 +108,18 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4", "RET", "ARG", "PTH", 
 # version is declared via requires-python = ">=3.11".
 strict = true
 warn_unused_ignores = true
-warn_redundant_casts = true
+# Redundant casts: we insert `cast("pd.DataFrame", ...)` around
+# DuckDB's `.fetchdf()` returns. On newer library stubs the cast is
+# redundant; on older ones it is required. Disabling the redundant-
+# cast warning keeps a single source of code that works across
+# supported CI/dev Python versions.
+warn_redundant_casts = false
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+# Pandera's `@dataframe_check` decorator does not expose a typed
+# signature for its return value. We keep the check itself strict;
+# only the decorator-level check is relaxed.
+disallow_untyped_decorators = false
 no_implicit_optional = true
 show_error_codes = true
 exclude = ["dbt/", "build/", "dist/"]
