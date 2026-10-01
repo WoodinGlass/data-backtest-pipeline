@@ -217,9 +217,16 @@ class RawStore:
             )
 
         # Slow path: write the Parquet file, then update the manifest.
+        # We add `ticker` as an explicit column so downstream consumers
+        # (dbt, features) do not need to infer it from the file path.
+        # The content hash is unaffected: it is computed above, before
+        # this insertion.
         rel_path = f"{ticker}/{h[:HASH_PREFIX_LEN]}.parquet"
         abs_path = self._resolve_root() / rel_path
-        self._write_parquet(df, abs_path)
+        df_to_write = df.copy()
+        if "ticker" not in df_to_write.columns:
+            df_to_write.insert(0, "ticker", ticker)
+        self._write_parquet(df_to_write, abs_path)
 
         now = datetime.now(tz=UTC)
         entry = {
@@ -322,6 +329,10 @@ class RawStore:
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df = df.set_index("date").sort_index()
         df.index.name = "date"
+        # Drop ticker if present: RawStore's read contract returns OHLCV
+        # only, ticker is contextual (caller knows what they asked for).
+        if "ticker" in df.columns:
+            df = df.drop(columns=["ticker"])
         return df
 
     def _read_manifest(self) -> dict[str, Any]:

@@ -47,6 +47,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `high`. Rewritten to modify `volume` instead — still a distinct
   snapshot, but a valid one.
 
+### Added — M2 (dbt warehouse)
+- **dbt project skeleton** (`dbt_project.yml`, `profiles.example.yml`,
+  `packages.yml`).
+- **Staging**: `stg_prices` (typed, renamed; view).
+- **Intermediate**: `int_returns` (log returns + forward labels, point-in-time;
+  view).
+- **Marts**: `dim_tickers` (point-in-time membership), `fct_prices_daily`,
+  `fct_returns_daily` (model-ready: features + labels).
+- **Seed**: `ticker_metadata` (32 tickers, sector, benchmark flag).
+- **Source freshness macro** (`raw_prices_freshness`).
+- **Singular tests**: OHLC invariants, PIT return boundaries, return ranges,
+  label NULL equivalence, benchmark presence.
+- **Custom schema naming macro** (`generate_schema_name`) so schemas are
+  `staging` / `intermediate` / `marts` rather than `main_staging` / etc.
+- **CI job `dbt-build`** running against a committed fixture
+  (`tests/fixtures/raw/prices/yfinance/`, 3 tickers x 21 days) — fully hermetic.
+- **`scripts/make_test_fixture.py`** to regenerate the fixture from the raw layer.
+- **`make dbt-build FIXTURE=1`** runs the fixture-mode build locally.
+
 ### Added (post-M1 hardening)
 - `ingestion/validation.py` — vectorized OHLCV validator invoked on
   every `RawStore.write_snapshot`. Hard-fails on empty input, missing

@@ -123,10 +123,11 @@ Full rationale is recorded in `docs/adr/`.
 
 ## Tech Stack
 
+
 - **Language:** Python 3.11
 - **Market data:** `yfinance` (default, no API key), optional `Stooq` fallback
 - **Warehouse:** DuckDB (default), Snowflake (optional)
-- **Transformation:** dbt
+- **Transformation:** dbt (with `dbt_utils`)
 - **Data quality:** Pandera / Great Expectations, dbt tests
 - **Orchestration:** Prefect
 - **Experiment tracking:** MLflow
@@ -135,9 +136,8 @@ Full rationale is recorded in `docs/adr/`.
 - **Dashboard:** Streamlit
 - **Tooling:** ruff, mypy, pytest, pre-commit, Makefile
 
----
-
 ## Data Contracts
+
 
 Schemas are defined before any producer or consumer code is written.
 
@@ -148,7 +148,7 @@ from pydantic import BaseModel, Field
 
 
 class RawPriceEvent(BaseModel):
-    \"\"\"One immutable daily OHLCV bar for a single ticker.\"\"\"
+    """One immutable daily OHLCV bar for a single ticker."""
 
     source: str
     ticker: str
@@ -167,9 +167,15 @@ class RawPriceEvent(BaseModel):
         return f"{self.source}:{self.ticker}:{self.trade_date.isoformat()}:{self.payload_hash}"
 ```
 
-Contracts live in `ingestion/schemas.py` and are documented in `docs/data_dictionary.md`.
+Contracts live in `ingestion/schemas.py` and are documented in
+`docs/data_dictionary.md`.
 
----
+The raw Parquet snapshots additionally carry a `ticker` column (written
+by `RawStore.write_snapshot`) so that dbt models do not need to infer
+the symbol from the file path. `RawStore.read_latest(ticker)` still
+returns OHLCV-only; the `ticker` column is added at write time and
+dropped on read. The content hash is unaffected (computed before the
+column is inserted).
 
 ## Pipeline Layers
 
@@ -179,10 +185,22 @@ Contracts live in `ingestion/schemas.py` and are documented in `docs/data_dictio
 - Raw layer is immutable and stored as daily Parquet partitions. Corrections (splits, dividends, restatements) are **new rows**, never updates.
 
 ### 2. Warehouse (`dbt/`)
-- `staging`: typed, renamed OHLCV 1:1 with raw.
-- `intermediate`: adjusted-return computation, corporate-action handling, universe filtering.
-- `marts`: `dim_tickers`, `fct_prices_daily`, `fct_returns_daily`, `fct_predictions`.
-- Tests: `not_null`, `unique`, `relationships`, and source freshness.
+
+### 2. Warehouse (`dbt/`)
+- **`staging`** — `stg_prices`: typed, renamed OHLCV 1:1 with raw
+  (`date` -> `trade_date`). Materialized as a view.
+- **`intermediate`** — `int_returns`: log returns plus forward labels
+  (next-day close, log return, sign). The point-in-time contract is
+  documented in the model header and enforced by singular tests.
+- **`marts`** — `dim_tickers` (point-in-time universe membership, sector,
+  benchmark flag), `fct_prices_daily`, `fct_returns_daily` (model-ready:
+  features at `t`, labels at `t+1`).
+- **Tests (53 total)**: `not_null`, `unique`, `relationships`,
+  `accepted_values`, `dbt_utils.unique_combination_of_columns`, plus
+  singular tests for OHLC invariants, PIT boundaries, return ranges,
+  label NULL equivalence, and benchmark presence.
+- **Source freshness**: `sources.yml` declares `raw.prices` as an external
+  Parquet glob (var-overridable), with a custom freshness macro.
 
 ### 3. Data quality gate
 - Pandera / Great Expectations checks run before features are built.
@@ -243,15 +261,21 @@ Contracts live in `ingestion/schemas.py` and are documented in `docs/data_dictio
 
 ## Universe & Data Source
 
-**Universe:** ~30 large-cap, highly liquid S&P 500 tickers (configurable via `config/universe.txt`). Members are defined **as-of each backtest date**, not as-of today.
+
+**Universe:** 31 large-cap, highly liquid S&P 500 tickers + SPY benchmark.
+Defined in two places:
+- `config/universe.txt` — what ingestion fetches.
+- `dbt/seeds/ticker_metadata.csv` — sectors, benchmark flag, and
+  point-in-time validity intervals (`valid_from`, `valid_to`). This is
+  what marts join against, so a ticker delisted mid-backtest is
+  correctly excluded for its post-delisting period (ADR 0005).
 
 **Benchmark:** `SPY`.
 
-**Data source:** `yfinance` — free, no API key. Raw responses cached to Parquet immediately so the pipeline is reproducible without network.
+**Data source:** `yfinance` — free, no API key. Raw responses cached to
+Parquet immediately so the pipeline is reproducible without network.
 
 **Frequency:** daily bars, fetched after US market close.
-
----
 
 ## Quickstart
 
@@ -306,33 +330,47 @@ Dependencies live in `pyproject.toml` with self-contained extras: `dev`, `dbt`, 
 
 ## Project Structure
 
+
 ```text
-├── ingestion/        # yfinance client, retry, raw schema, Parquet writer
+├── ingestion/          # yfinance client, retry, raw schema, Parquet writer
 ├── dbt/
-│   ├── models/{staging,intermediate,marts}/
-│   ├── tests/  snapshots/  macros/
-├── features/         # point-in-time feature builders + anti-leakage tests
-├── backtest/         # walk-forward, metrics, staking
-├── models/           # train, calibrate, registry
-├── orchestration/    # Prefect flows
-├── monitoring/       # drift, data freshness
-├── app/              # Streamlit dashboard
-├── config/           # universe list, feature configs
-├── tests/{unit,integration}/
-├── docs/             # ADR, data dictionary, runbook
-├── .github/workflows/ci.yml
+│   ├── dbt_project.yml     # project config + vars (glob, freshness thresholds)
+│   ├── packages.yml        # dbt_utils and other package deps
+│   ├── profiles.example.yml
+│   ├── seeds/              # ticker_metadata.csv (universe + sectors)
+│   ├── models/
+│   │   ├── staging/        # stg_prices (+ _sources.yml)
+│   │   ├── intermediate/   # int_returns (point-in-time returns)
+│   │   └── marts/          # dim_tickers, fct_prices_daily, fct_returns_daily
+│   ├── tests/              # singular tests (OHLC, PIT boundaries, benchmark)
+│   └── macros/             # generate_schema_name, source_freshness
+├── features/           # point-in-time feature builders + anti-leakage tests
+├── backtest/           # walk-forward, metrics, staking
+├── models/             # train, calibrate, registry
+├── orchestration/      # Prefect flows
+├── monitoring/         # drift, data freshness
+├── app/                # Streamlit dashboard
+├── config/             # universe list (ticker universe)
+├── scripts/            # one-shot utilities (make_test_fixture.py)
+├── tests/
+│   ├── unit/           # pure, no external services
+│   ├── integration/    # needs network / Docker
+│   └── fixtures/       # committed tiny Parquet fixture for CI
+├── docs/               # ADR, data dictionary, runbook
+├── .github/workflows/  # CI: lint-and-test + dbt-build
 ├── Dockerfile  docker-compose.yml  Makefile
 └── pyproject.toml  .pre-commit-config.yaml
 ```
 
----
-
 ## Testing Strategy
+
 
 | Tier | Count | Scope | Marker |
 |---|---|---|---|
-| Unit | 99 | Pure functions, no external services (default) | none |
-| Integration | 4 | Needs DuckDB/Docker/network | `@pytest.mark.integration` |
+| Unit (pytest) | 99 | Pure functions, no external services (default) | none |
+| Integration (pytest) | 4 | Needs network (yfinance) | `@pytest.mark.integration` |
+| dbt schema tests | 47 | Column-level checks in model YAML | — |
+| dbt singular tests | 6 | SQL files under `dbt/tests/` | — |
 | Slow | — | Long-running backtests | `@pytest.mark.slow` |
 
 Key tests:
@@ -341,23 +379,33 @@ Key tests:
 - **Idempotency:** running ingestion twice does not duplicate rows.
 - **dbt tests:** `not_null`, `unique`, `relationships`, source freshness.
 - **Metrics:** log loss, Brier, Sharpe, max drawdown checked against hand-computed values.
-- **Corporate actions:** a synthetic 2:1 split does not produce a spurious −50% return.
-
----
+- **Corporate actions:** a synthetic 2:1 split does not produce a spurious -50% return.
 
 ## CI/CD
 
-GitHub Actions runs on every push and pull request:
 
-1. Install dependencies
-2. Lint (ruff) and type-check (mypy)
-3. Unit tests (pytest)
-4. `dbt build` on a small committed sample
-5. Smoke test on a 5-ticker, 30-day fixture
+GitHub Actions runs on every push and pull request. Two jobs run in
+parallel:
 
-Merges are blocked if any step fails. Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
+**`lint-and-test`** (Python):
+1. Install dependencies (`pip install -e ".[dev]"`)
+2. Lint (ruff) and format check
+3. Type-check (mypy, strict)
+4. Unit tests (`pytest -m "not integration and not slow"`)
 
----
+**`dbt-build`** (SQL / warehouse):
+1. Install `dbt-core` + `dbt-duckdb`
+2. `dbt deps` (install `dbt_utils`)
+3. `dbt build` **against a committed fixture**
+   (`tests/fixtures/raw/prices/yfinance/`)
+
+The fixture is a tiny, deterministic subset of the raw layer (3 tickers
+x 21 days, committed to git). The pipeline reads it via a `--vars`
+override of `raw_prices_glob`, so CI is fully hermetic: no network, no
+yfinance, identical results on every run.
+
+Merges are blocked if either job fails. Commits follow
+[Conventional Commits](https://www.conventionalcommits.org/).
 
 ## Observability and Monitoring
 
@@ -422,7 +470,7 @@ Severity policy: schema violation → hard fail; freshness/volume → warning fi
 ## Roadmap
 
 - [x] **M1:** Idempotent ingestion (retry, backoff, immutable raw Parquet layer)
-- [ ] **M2:** dbt staging + marts with `not_null`, `unique`, `relationships`, source freshness
+- [x] **M2:** dbt staging + marts with `not_null`, `unique`, `relationships`, source freshness
 - [ ] **M3:** Data quality gate (Pandera); pipeline fails on bad data
 - [ ] **M4:** Point-in-time features with anti-leakage tests
 - [ ] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration

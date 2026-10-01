@@ -38,6 +38,7 @@ mlruns/
 *.csv
 !docs/preview/*.csv
 !tests/fixtures/**/*.csv
+!tests/fixtures/**/*.parquet
 
 # ── dbt ────────────────────────────────────────────────────
 dbt/target/

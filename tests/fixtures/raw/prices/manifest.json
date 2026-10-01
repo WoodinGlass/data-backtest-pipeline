@@ -1,0 +1,45 @@
+{
+  "source": "yfinance",
+  "tickers": {
+    "AAPL": {
+      "latest_hash": "b6930842d8176145952f93d1700d0401e34a50896fefa63ff357e6462bda9644",
+      "snapshots": [
+        {
+          "first_date": "2024-01-02",
+          "hash": "b6930842d8176145952f93d1700d0401e34a50896fefa63ff357e6462bda9644",
+          "last_date": "2024-01-31",
+          "path": "AAPL/b6930842d8176145.parquet",
+          "rows": 21,
+          "written_at": "2026-10-01T16:09:17.580603+00:00"
+        }
+      ]
+    },
+    "MSFT": {
+      "latest_hash": "83dcee562f519520a06a64d364131aa49f3be0561d4f29b45aa8ab31a742510b",
+      "snapshots": [
+        {
+          "first_date": "2024-01-02",
+          "hash": "83dcee562f519520a06a64d364131aa49f3be0561d4f29b45aa8ab31a742510b",
+          "last_date": "2024-01-31",
+          "path": "MSFT/83dcee562f519520.parquet",
+          "rows": 21,
+          "written_at": "2026-10-01T16:09:17.730434+00:00"
+        }
+      ]
+    },
+    "SPY": {
+      "latest_hash": "94f5f7299910bc421e2daf7398bbc2273b01e7e5b9067f4d2963f8f5f52e8084",
+      "snapshots": [
+        {
+          "first_date": "2024-01-02",
+          "hash": "94f5f7299910bc421e2daf7398bbc2273b01e7e5b9067f4d2963f8f5f52e8084",
+          "last_date": "2024-01-31",
+          "path": "SPY/94f5f7299910bc42.parquet",
+          "rows": 21,
+          "written_at": "2026-10-01T16:09:32.756086+00:00"
+        }
+      ]
+    }
+  },
+  "version": 1
+}

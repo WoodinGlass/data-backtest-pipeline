@@ -1,0 +1,33 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Immutable raw layer. Each snapshot is a Parquet file written by
+      ingestion/raw_store.py. Files are append-only; a new file appears
+      whenever OHLCV content changes (adj_close noise is excluded — see
+      ADR 0006).
+    meta:
+      external_location: "{{ var('raw_prices_glob') }}"
+    tables:
+      - name: prices
+        description: >
+          Daily OHLCV bars, one row per (ticker, trade_date). Columns
+          match the ingestion schema exactly; no renaming happens here.
+        columns:
+          - name: ticker
+            description: "Ticker symbol (e.g. AAPL)."
+            data_tests:
+              - not_null
+          - name: date
+            description: "Trade date (UTC-naive, one row per trading day)."
+            data_tests:
+              - not_null
+          - name: close
+            description: "Closing price, adjusted for splits per source."
+            data_tests:
+              - not_null
+          - name: volume
+            description: "Share volume; non-negative."
+            data_tests:
+              - not_null

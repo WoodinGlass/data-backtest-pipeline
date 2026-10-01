@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── Python: lint, type-check, unit tests ─────────────────
   lint-and-test:
     runs-on: ubuntu-latest
     strategy:
@@ -43,4 +44,37 @@ jobs:
       - name: Unit tests
         run: pytest -m "not integration and not slow" --cov --cov-report=term-missing
 
-      # dbt build step will be enabled in M2 once models exist.
+  # ── dbt: build + test against committed fixture ──────────
+  dbt-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dbt]"
+
+      - name: Prepare dbt profile
+        run: cp dbt/profiles.example.yml dbt/profiles.yml
+
+      - name: Install dbt packages
+        run: dbt deps --project-dir dbt --profiles-dir dbt
+
+      - name: Prepare warehouse directory
+        run: mkdir -p data
+
+      - name: dbt build (against committed fixture)
+        # Override the raw_prices_glob var so dbt reads the small
+        # committed fixture (tests/fixtures/raw/prices/yfinance/)
+        # instead of the gitignored local raw layer. This keeps CI
+        # hermetic: no yfinance calls, no network, deterministic.
+        run: |
+          dbt build --project-dir dbt --profiles-dir dbt \
+            --vars '{"raw_prices_glob": "tests/fixtures/raw/prices/yfinance/*/*.parquet"}'

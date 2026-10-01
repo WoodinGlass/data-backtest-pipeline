@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: fct_returns_daily
+    description: >
+      Model-ready daily returns table: features known at t plus labels
+      known at t+1. One row per (ticker, trade_date). Consumed by
+      feature builders (M4) and the walk-forward backtest (M5).
+    columns:
+      - name: ticker
+        description: "Ticker symbol."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tickers')
+                field: ticker
+
+      - name: trade_date
+        description: "Trade date."
+        data_tests:
+          - not_null
+
+      - name: adj_close
+        description: "Adjusted close at t."
+        data_tests:
+          - not_null
+
+      - name: log_return
+        description: "ln(adj_close_t / adj_close_{t-1})."
+        data_tests:
+          - not_null:
+              config:
+                where: "log_return is not null"
+
+      - name: next_return_positive
+        description: >
+          Binary classification label. NULL on the last bar per ticker.
+        # The value distribution is checked in tests/assert_label_distribution.sql.
+        # The NULL pattern is checked in int_returns tests, which this
+        # table mirrors.
+
+      - name: sector
+        description: "Sector from dim_tickers."
+        data_tests:
+          - not_null
+
+      - name: is_benchmark
+        description: "True for SPY."
+        data_tests:
+          - not_null
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - ticker
+              - trade_date

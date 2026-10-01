@@ -37,6 +37,7 @@ models:
 seeds:
   data_backtest_pipeline:
     +schema: seeds
+    +quote_columns: false
 
 # ── Vars ────────────────────────────────────────────────────
 # Central place for tunable parameters. Referenced from models

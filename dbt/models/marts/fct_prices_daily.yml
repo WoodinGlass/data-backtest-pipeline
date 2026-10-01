@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: fct_prices_daily
+    description: >
+      Daily OHLCV bars joined to ticker metadata (sector, benchmark
+      flag). One row per (ticker, trade_date). Model-ready for feature
+      engineering in M4.
+    columns:
+      - name: ticker
+        description: "Ticker symbol."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tickers')
+                field: ticker
+
+      - name: trade_date
+        description: "Trade date."
+        data_tests:
+          - not_null
+
+      - name: close
+        description: "Raw close."
+        data_tests:
+          - not_null
+
+      - name: adj_close
+        description: "Adjusted close (vendor)."
+        data_tests:
+          - not_null
+
+      - name: volume
+        description: "Share volume, >= 0."
+        data_tests:
+          - not_null
+
+      - name: sector
+        description: "Sector from dim_tickers."
+        data_tests:
+          - not_null
+
+      - name: is_benchmark
+        description: "True for SPY."
+        data_tests:
+          - not_null
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - ticker
+              - trade_date

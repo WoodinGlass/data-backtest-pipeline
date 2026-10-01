@@ -28,8 +28,15 @@ test-all:  ## Run all tests with coverage
 ingest:  ## Fetch daily bars into the raw layer (START=YYYY-MM-DD END=YYYY-MM-DD)
 	python -m ingestion.cli $(if $(START),--start $(START)) $(if $(END),--end $(END))
 
-dbt-build:  ## Run dbt models and tests
-	dbt build --project-dir dbt --profiles-dir dbt
+dbt-build:  ## Run dbt build (use FIXTURE=1 for the committed CI fixture)
+	@if [ "$(FIXTURE)" = "1" ]; then \
+		echo "dbt build against fixture (tests/fixtures/...)"; \
+		dbt build --project-dir dbt --profiles-dir dbt \
+			--vars '{"raw_prices_glob": "tests/fixtures/raw/prices/yfinance/*/*.parquet"}'; \
+	else \
+		echo "dbt build against real raw layer (data/raw/...)"; \
+		dbt build --project-dir dbt --profiles-dir dbt; \
+	fi
 
 backtest:  ## Run the walk-forward backtest
 	python -m backtest.run

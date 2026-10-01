@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: dim_tickers
+    description: >
+      Ticker dimension with point-in-time universe membership. Each row
+      covers the half-open interval [valid_from, valid_to) during which
+      the ticker was a member of the universe.
+    columns:
+      - name: ticker
+        description: "Ticker symbol."
+        data_tests:
+          - not_null
+          - unique
+
+      - name: sector
+        description: "GICS-style sector classification."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Information Technology
+                  - Communication Services
+                  - Consumer Discretionary
+                  - Consumer Staples
+                  - Financials
+                  - Health Care
+                  - Industrials
+                  - Energy
+                  - Utilities
+                  - Materials
+                  - Benchmark
+
+      - name: is_benchmark
+        description: "True for the benchmark index proxy (SPY)."
+        data_tests:
+          - not_null
+
+      - name: valid_from
+        description: "First date the ticker was a member (inclusive)."
+        data_tests:
+          - not_null

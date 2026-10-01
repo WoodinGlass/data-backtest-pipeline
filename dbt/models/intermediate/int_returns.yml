@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: int_returns
+    description: >
+      Log returns and forward (next-day) returns, one row per
+      (ticker, trade_date). See the anti-leakage contract in the
+      model file. Columns prefixed `next_` are labels, never features.
+      Range and NULL-equivalence checks live in singular tests under
+      dbt/tests/ (see assert_return_ranges.sql and
+      assert_label_null_equivalence.sql) rather than in
+      dbt_utils.expression_is_true, which does not parse compound
+      boolean expressions reliably.
+    columns:
+      - name: ticker
+        description: "Ticker symbol."
+        data_tests:
+          - not_null
+
+      - name: trade_date
+        description: "Trade date (UTC-naive)."
+        data_tests:
+          - not_null
+
+      - name: adj_close
+        description: "Vendor-adjusted close at t."
+        data_tests:
+          - not_null
+
+      - name: log_return
+        description: >
+          ln(adj_close_t / adj_close_{t-1}). NULL only on the first bar
+          per ticker. Range: (-1, 1). See assert_return_ranges.sql.
+        data_tests:
+          - not_null:
+              config:
+                # The first bar per ticker legitimately has NULL log_return.
+                where: "log_return is not null"
+
+      - name: next_log_return
+        description: >
+          ln(adj_close_{t+1} / adj_close_t). Regression label.
+          NULL only on the last bar per ticker. Range: (-1, 1).
+        data_tests:
+          - not_null:
+              config:
+                where: "next_log_return is not null"
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - ticker
+              - trade_date

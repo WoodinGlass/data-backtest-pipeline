@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: stg_prices
+    description: >
+      Typed and renamed daily OHLCV bars, one row per (ticker, trade_date).
+      Materialized as a view: cheap, always reflects the raw layer.
+    columns:
+      - name: ticker
+        description: "Ticker symbol (uppercase, e.g. AAPL)."
+        data_tests:
+          - not_null
+
+      - name: trade_date
+        description: "Trade date (UTC-naive, one row per trading day)."
+        data_tests:
+          - not_null
+
+      - name: open
+        description: "Open price; positive."
+        data_tests:
+          - not_null
+
+      - name: high
+        description: "High price; >= open, low, close."
+        data_tests:
+          - not_null
+
+      - name: low
+        description: "Low price; <= open, close."
+        data_tests:
+          - not_null
+
+      - name: close
+        description: "Close price (unadjusted for dividends)."
+        data_tests:
+          - not_null
+
+      - name: adj_close
+        description: >
+          Vendor-adjusted close. Derived; not used for the content hash
+          (see ADR 0006). Will be recomputed in intermediate once we have
+          corporate actions.
+        data_tests:
+          - not_null
+
+      - name: volume
+        description: "Share volume; >= 0."
+        data_tests:
+          - not_null
+
+    data_tests:
+      # Composite uniqueness: our grain is (ticker, trade_date).
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - ticker
+              - trade_date
