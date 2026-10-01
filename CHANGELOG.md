@@ -47,6 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `high`. Rewritten to modify `volume` instead — still a distinct
   snapshot, but a valid one.
 
+### Added — M3 (data quality gate)
+- **`quality/` package** with Pandera schemas at each layer boundary:
+  - `RawPricesSchema` — raw Parquet contracts (ticker, OHLCV).
+  - `StgPricesSchema` — typed staging contract.
+  - `FctReturnsSchema` — marts contract (features + labels + dims).
+- **`quality/gate.py`** — runner that loads each layer, validates,
+  and produces a JSON-serialisable `GateReport`.
+- **`quality/cli.py`** — `dbp-quality` entry point and `python -m
+  quality.cli`. Flags: `--tickers`, `--tickers-from-raw`, `--skip`,
+  `--json`, `--quiet`.
+- **`scripts/demo_bad_data.py`** — 4-step story demonstrating that the
+  gate catches OHLC violations and label NULL mismatches.
+- **36 unit tests** for schemas/gate/cli, **6 integration tests** that
+  corrupt a copy of the warehouse and assert the gate fails loudly.
+- **CI**: quality step added to the `dbt-build` job; uses
+  `--tickers-from-raw` so the same gate validates both the full
+  universe (local) and the committed fixture (CI).
+- **`make quality`, `make quality-json`, `make ci`** targets.
+- **ADR 0008** — three-layer defense rationale.
+
 ### Added — M2 (dbt warehouse)
 - **dbt project skeleton** (`dbt_project.yml`, `profiles.example.yml`,
   `packages.yml`).

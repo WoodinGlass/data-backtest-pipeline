@@ -39,12 +39,12 @@ jobs:
         run: ruff format --check .
 
       - name: Type-check (mypy)
-        run: mypy ingestion
+        run: mypy ingestion quality
 
       - name: Unit tests
         run: pytest -m "not integration and not slow" --cov --cov-report=term-missing
 
-  # ── dbt: build + test against committed fixture ──────────
+  # ── Warehouse + quality gate: dbt + Pandera on fixture ───
   dbt-build:
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +59,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dbt]"
+          pip install -e ".[dbt,quality]"
 
       - name: Prepare dbt profile
         run: cp dbt/profiles.example.yml dbt/profiles.yml
@@ -71,10 +71,26 @@ jobs:
         run: mkdir -p data
 
       - name: dbt build (against committed fixture)
-        # Override the raw_prices_glob var so dbt reads the small
-        # committed fixture (tests/fixtures/raw/prices/yfinance/)
-        # instead of the gitignored local raw layer. This keeps CI
-        # hermetic: no yfinance calls, no network, deterministic.
         run: |
           dbt build --project-dir dbt --profiles-dir dbt \
             --vars '{"raw_prices_glob": "tests/fixtures/raw/prices/yfinance/*/*.parquet"}'
+
+      - name: Quality gate (raw + staging + marts)
+        # The gate reads the raw layer from where ingestion would have
+        # written it. In CI there is no real ingest; we point at the
+        # committed fixture instead. The warehouse was built in the
+        # previous step, so staging and marts are available there.
+        env:
+          RAW_DATA_DIR: tests/fixtures/raw
+        run: |
+          python -m quality.cli \
+            --json reports/quality.json
+
+      - name: Upload quality report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-report
+          path: reports/quality.json
+          if-no-files-found: ignore
+          retention-days: 7

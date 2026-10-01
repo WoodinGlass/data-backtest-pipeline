@@ -203,9 +203,20 @@ column is inserted).
   Parquet glob (var-overridable), with a custom freshness macro.
 
 ### 3. Data quality gate
-- Pandera / Great Expectations checks run before features are built.
-- Checks: no gaps > N trading days, `low ≤ open,close ≤ high`, non-negative volume, sane return bounds.
-- The pipeline **fails** if the data is bad. No silent passes.
+
+### 3. Data quality gate (`quality/`)
+- **Declarative Pandera schemas** at each layer boundary:
+  `RawPricesSchema`, `StgPricesSchema`, `FctReturnsSchema`.
+- **Runner** (`quality/gate.py`) loads each layer, validates, produces
+  a structured JSON report, and exits non-zero on any failure.
+- **CLI** (`dbp-quality`, `make quality`) for local, CI, and
+  orchestration use.
+- **Three-layer defense** (see ADR 0008):
+  1. `ingestion/validation.py` — vectorized, in the ingest hot path.
+  2. `quality/` — declarative contracts at layer boundaries.
+  3. `dbt/models/**/*.yml` + `dbt/tests/` — SQL-native warehouse checks.
+- Failures are actionable: the report identifies the layer, the row,
+  the column, and the invariant that was violated.
 
 ### 4. Features (`features/`)
 - Point-in-time feature builders: a feature for date `t` only uses data available strictly before `t`.
@@ -298,6 +309,7 @@ make test        # unit tests
 make test-int    # integration tests
 make ingest      # fetch daily bars into the raw layer
 make dbt-build   # run dbt models and tests
+make quality     # run the data quality gate (raw + staging + marts)
 make backtest    # run the walk-forward backtest
 make app         # start the Streamlit dashboard
 make down        # stop services
@@ -333,6 +345,7 @@ Dependencies live in `pyproject.toml` with self-contained extras: `dev`, `dbt`, 
 
 ```text
 ├── ingestion/          # yfinance client, retry, raw schema, Parquet writer
+├── quality/            # Pandera schemas + gate + CLI (dbp-quality)
 ├── dbt/
 │   ├── dbt_project.yml     # project config + vars (glob, freshness thresholds)
 │   ├── packages.yml        # dbt_utils and other package deps
@@ -365,10 +378,11 @@ Dependencies live in `pyproject.toml` with self-contained extras: `dev`, `dbt`, 
 ## Testing Strategy
 
 
+
 | Tier | Count | Scope | Marker |
 |---|---|---|---|
-| Unit (pytest) | 99 | Pure functions, no external services (default) | none |
-| Integration (pytest) | 4 | Needs network (yfinance) | `@pytest.mark.integration` |
+| Unit (pytest) | 135 | Pure functions, no external services (default) | none |
+| Integration (pytest) | 10 | Needs network (yfinance) or a warehouse | `@pytest.mark.integration` |
 | dbt schema tests | 47 | Column-level checks in model YAML | — |
 | dbt singular tests | 6 | SQL files under `dbt/tests/` | — |
 | Slow | — | Long-running backtests | `@pytest.mark.slow` |
@@ -378,10 +392,13 @@ Key tests:
 - **Survivorship:** universe membership is date-aware; delisted tickers remain.
 - **Idempotency:** running ingestion twice does not duplicate rows.
 - **dbt tests:** `not_null`, `unique`, `relationships`, source freshness.
+- **Quality gate:** corrupting a copy of the warehouse triggers failure
+  with an actionable message (see `tests/integration/test_quality_gate_e2e.py`).
 - **Metrics:** log loss, Brier, Sharpe, max drawdown checked against hand-computed values.
 - **Corporate actions:** a synthetic 2:1 split does not produce a spurious -50% return.
 
 ## CI/CD
+
 
 
 GitHub Actions runs on every push and pull request. Two jobs run in
@@ -394,14 +411,16 @@ parallel:
 4. Unit tests (`pytest -m "not integration and not slow"`)
 
 **`dbt-build`** (SQL / warehouse):
-1. Install `dbt-core` + `dbt-duckdb`
+1. Install `dbt-core` + `dbt-duckdb` + Pandera
 2. `dbt deps` (install `dbt_utils`)
 3. `dbt build` **against a committed fixture**
    (`tests/fixtures/raw/prices/yfinance/`)
+4. **Quality gate** (`python -m quality.cli --tickers-from-raw`) validates
+   raw, staging, and marts against Pandera schemas
+5. Quality report uploaded as a CI artifact
 
 The fixture is a tiny, deterministic subset of the raw layer (3 tickers
-x 21 days, committed to git). The pipeline reads it via a `--vars`
-override of `raw_prices_glob`, so CI is fully hermetic: no network, no
+x 21 days, committed to git). CI is fully hermetic: no network, no
 yfinance, identical results on every run.
 
 Merges are blocked if either job fails. Commits follow
@@ -471,7 +490,7 @@ Severity policy: schema violation → hard fail; freshness/volume → warning fi
 
 - [x] **M1:** Idempotent ingestion (retry, backoff, immutable raw Parquet layer)
 - [x] **M2:** dbt staging + marts with `not_null`, `unique`, `relationships`, source freshness
-- [ ] **M3:** Data quality gate (Pandera); pipeline fails on bad data
+- [x] **M3:** Data quality gate (Pandera); pipeline fails on bad data
 - [ ] **M4:** Point-in-time features with anti-leakage tests
 - [ ] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration
 - [ ] **M6:** MLflow tracking

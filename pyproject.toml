@@ -80,12 +80,13 @@ app = [
 
 [project.scripts]
 dbp-ingest = "ingestion.cli:main"
+dbp-quality = "quality.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
     "ingestion*", "features*", "backtest*", "models*",
-    "orchestration*", "monitoring*", "app*",
+    "orchestration*", "monitoring*", "app*", "quality*",
 ]
 
 # ── ruff ────────────────────────────────────────────────────
@@ -117,6 +118,15 @@ exclude = ["dbt/", "build/", "dist/"]
 [[tool.mypy.overrides]]
 module = ["duckdb.*", "prefect.*", "mlflow.*", "streamlit.*", "yfinance.*", "pyarrow.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Pandera 0.33's `Series[T]` typing does not satisfy mypy strict's
+# `type-arg` check: mypy sees `Series` as generic but cannot verify
+# the type parameter the way we write it. The parameters are enforced
+# at runtime by pandera itself, and serve as documentation. We disable
+# only this specific check, only for the schema definition module.
+module = ["quality.schemas"]
+disable_error_code = ["type-arg"]
 
 # ── pytest ──────────────────────────────────────────────────
 [tool.pytest.ini_options]

@@ -1,5 +1,5 @@
-.PHONY: help install lint format test test-int test-all \
-        dbt-build ingest backtest app up down clean
+.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci
+
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -21,6 +21,20 @@ test:  ## Run unit tests
 
 test-int:  ## Run integration tests (needs Docker/network)
 	pytest -m "integration"
+
+quality:  ## Run the data quality gate (raw + staging + marts)
+	python -m quality.cli
+
+quality-json:  ## Run the gate and write a JSON report to ./reports/quality.json
+	python -m quality.cli --json reports/quality.json
+
+ci:  ## Run the full CI suite locally (lint + test + dbt + quality)
+	ruff check .
+	ruff format --check .
+	mypy ingestion quality
+	pytest -m "not integration and not slow"
+	$(MAKE) dbt-build FIXTURE=1
+	RAW_DATA_DIR=tests/fixtures/raw python -m quality.cli --tickers-from-raw
 
 test-all:  ## Run all tests with coverage
 	pytest --cov --cov-report=term-missing
