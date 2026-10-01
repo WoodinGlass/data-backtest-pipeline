@@ -86,6 +86,7 @@ jobs:
           RAW_DATA_DIR: tests/fixtures/raw
         run: |
           python -m quality.cli \
+            --tickers-from-raw \
             --json reports/quality.json
 
       - name: Upload quality report
