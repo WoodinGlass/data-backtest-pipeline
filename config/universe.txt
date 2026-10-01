@@ -1,0 +1,64 @@
+# data-backtest-pipeline — trading universe
+#
+# One ticker per line. Blank lines and '#' comments are ignored.
+#
+# NOTE ON SURVIVORSHIP BIAS (see ADR 0005):
+#   This list is the *starting* universe for the MVP. In later
+#   milestones, membership will be stored point-in-time as
+#   (ticker, valid_from, valid_to) so that backtests do not
+#   benefit from hindsight. Until then, treat backtest results
+#   as *optimistic* with respect to survivorship.
+#
+# Sectors are annotated for readability only.
+
+# ── Mega-cap tech ──────────────────────────────────────────
+AAPL          # Apple
+MSFT          # Microsoft
+GOOGL         # Alphabet
+AMZN          # Amazon
+META          # Meta Platforms
+NVDA          # NVIDIA
+TSLA          # Tesla
+
+# ── Financials ─────────────────────────────────────────────
+JPM           # JPMorgan Chase
+BAC           # Bank of America
+WFC           # Wells Fargo
+GS            # Goldman Sachs
+V             # Visa
+
+# ── Healthcare ─────────────────────────────────────────────
+JNJ           # Johnson & Johnson
+UNH           # UnitedHealth
+PFE           # Pfizer
+MRK           # Merck
+
+# ── Consumer ───────────────────────────────────────────────
+WMT           # Walmart
+KO            # Coca-Cola
+PEP           # PepsiCo
+PG            # Procter & Gamble
+MCD           # McDonald's
+HD            # Home Depot
+
+# ── Industrials ────────────────────────────────────────────
+BA            # Boeing
+CAT           # Caterpillar
+GE            # General Electric
+
+# ── Energy ─────────────────────────────────────────────────
+XOM           # Exxon Mobil
+CVX           # Chevron
+
+# ── Utilities ──────────────────────────────────────────────
+NEE           # NextEra Energy
+
+# ── Materials ──────────────────────────────────────────────
+LIN           # Linde
+
+# ── Communications ─────────────────────────────────────────
+DIS           # Walt Disney
+NFLX          # Netflix
+
+# ── Benchmark ──────────────────────────────────────────────
+SPY           # SPDR S&P 500 ETF Trust

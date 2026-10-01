@@ -11,12 +11,31 @@
 | `trade_date` | DATE | The bar's date (exchange tz, UTC-normalized) | Part of idempotency key |
 | `ingested_at` | TIMESTAMPTZ | When we fetched it (UTC) | Set by us |
 | `payload_hash` | TEXT | SHA-256 of canonical OHLCV payload | Part of idempotency key |
-| `open` | DECIMAL | Open price | Adjusted for splits/dividends per source |
-| `high` | DECIMAL | High price | Same |
-| `low` | DECIMAL | Low price | Same |
-| `close` | DECIMAL | Close price | Same |
-| `adj_close` | DECIMAL | Adjusted close | Same |
-| `volume` | BIGINT | Share volume | Non-negative |
+| `open` | DECIMAL | Open price | **Hashed** |
+| `high` | DECIMAL | High price | **Hashed** |
+| `low` | DECIMAL | Low price | **Hashed** |
+| `close` | DECIMAL | Close price | **Hashed** |
+| `adj_close` | DECIMAL | Adjusted close, computed by the vendor | **Not hashed** — see ADR 0006 |
+| `volume` | BIGINT | Share volume | **Hashed**, non-negative |
+
+### Which columns participate in the content hash?
+
+The raw snapshot hash uses the primary (exchange-derived) fields only:
+
+```
+HASHED_COLUMNS = (open, high, low, close, volume)
+PRICE_HASH_DECIMALS = 4
+```
+
+`adj_close` is **stored but not hashed**. It is a derived value that the
+vendor (`yfinance`) recomputes on each request with minor float noise
+(~3e-5 between fetches). Hashing it breaks idempotency: two snapshots
+with identical OHLCV but different `adj_close` are semantically the same
+bar and must be treated as such.
+
+Adjusted prices will be recomputed from `close` + corporate actions in
+the dbt layer (M2). See `docs/adr/0006-content-hash-excludes-adjusted-close.md`
+for the full rationale and the evidence that motivated this decision.
 
 ## Staging / Intermediate / Marts
 

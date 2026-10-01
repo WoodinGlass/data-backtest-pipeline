@@ -102,7 +102,9 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4", "RET", "ARG", "PTH", 
 
 # ── mypy ────────────────────────────────────────────────────
 [tool.mypy]
-python_version = "3.11"
+# python_version is intentionally NOT pinned: mypy uses the interpreter it
+# runs under. CI runs on 3.11; Colab runs on 3.13. The minimum supported
+# version is declared via requires-python = ">=3.11".
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
@@ -113,7 +115,7 @@ show_error_codes = true
 exclude = ["dbt/", "build/", "dist/"]
 
 [[tool.mypy.overrides]]
-module = ["duckdb.*", "prefect.*", "mlflow.*", "streamlit.*", "yfinance.*"]
+module = ["duckdb.*", "prefect.*", "mlflow.*", "streamlit.*", "yfinance.*", "pyarrow.*"]
 ignore_missing_imports = true
 
 # ── pytest ──────────────────────────────────────────────────
