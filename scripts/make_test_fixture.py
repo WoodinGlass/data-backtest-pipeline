@@ -76,18 +76,17 @@ def main() -> int:
     if src_manifest.exists():
         # Keep only entries for the fixture tickers
         import json
+
         manifest = json.loads(src_manifest.read_text())
         manifest["tickers"] = {
-            t: v for t, v in manifest.get("tickers", {}).items()
-            if t in FIXTURE_TICKERS
+            t: v for t, v in manifest.get("tickers", {}).items() if t in FIXTURE_TICKERS
         }
         (dest_manifest_dir / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True)
         )
         print(f"  manifest.json copied (tickers={sorted(manifest['tickers'])})")
 
-    print(f"\nFixture written: {total_rows} rows across "
-          f"{len(FIXTURE_TICKERS)} tickers")
+    print(f"\nFixture written: {total_rows} rows across {len(FIXTURE_TICKERS)} tickers")
     return 0
 
 
