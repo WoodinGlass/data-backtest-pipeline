@@ -1,0 +1,58 @@
+# ── secrets ────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# ── python ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+
+# ── build ──────────────────────────────────────────────────
+dist/
+build/
+.terraform/
+*.tfstate*
+*.tfvars
+
+# ── data & artifacts ───────────────────────────────────────
+data/
+mlruns/
+*.sqlite
+*.duckdb
+*.parquet
+*.csv
+!docs/preview/*.csv
+!tests/fixtures/**/*.csv
+
+# ── dbt ────────────────────────────────────────────────────
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/profiles.yml
+.dbt/
+
+# ── preview artifacts (keep only docs/preview/*.png) ───────
+*.png
+!docs/preview/*.png
+
+# ── platform ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

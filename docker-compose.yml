@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    container_name: dbp-app
+    env_file:
+      - .env
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+    command: ["sleep", "infinity"]
