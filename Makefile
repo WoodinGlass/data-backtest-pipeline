@@ -1,4 +1,4 @@
-.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci ingest-macro install-all
+.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci ingest-macro install-all ingest-sec
 
 
 help:  ## Show this help
@@ -44,6 +44,9 @@ test-all:  ## Run all tests with coverage
 
 ingest-macro:  ## Fetch macro series into the raw layer
 	python -m ingestion.macro.cli
+
+ingest-sec:  ## Fetch SEC EDGAR fundamentals into the raw layer
+	python -m ingestion.sec.cli
 
 ingest:  ## Fetch daily bars into the raw layer (START=YYYY-MM-DD END=YYYY-MM-DD)
 	python -m ingestion.cli $(if $(START),--start $(START)) $(if $(END),--end $(END))

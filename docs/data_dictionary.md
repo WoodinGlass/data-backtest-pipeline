@@ -155,3 +155,34 @@ trade_date` and `observation_date <= trade_date`.
 
 Wide: one row per trade_date, 140 `macro_<series_id_lowercase>` columns.
 Column list from `macro_series_ids` dbt var.
+
+## Raw fundamental layer (M3.7)
+
+### `data/raw/fundamentals/sec/<TICKER>/CIK#########__<hash16>.parquet`
+
+One snapshot per ticker. Content-addressed by hash of the fact set.
+No PIT enforcement at this layer (see ADR 0010 implementation notes).
+
+| Column | Type | Description |
+|---|---|---|
+| `ticker` | VARCHAR | Ticker symbol (uppercase) |
+| `cik` | BIGINT | SEC Central Index Key |
+| `namespace` | VARCHAR | `us-gaap`, `dei`, `ifrs-full`, `ffd`, ... |
+| `tag` | VARCHAR | XBRL tag name, e.g. `Revenues` |
+| `unit` | VARCHAR | `USD`, `shares`, `pure`, ... |
+| `period_start` | DATE | Period start; NULL for point-in-time facts |
+| `period_end` | DATE | Period end |
+| `filed` | DATE | Date the fact first appeared in a filing |
+| `form` | VARCHAR | `10-K`, `10-Q`, `8-K`, ... |
+| `fiscal_year` | INT | SEC's fiscal year label, if present |
+| `fiscal_period` | VARCHAR | `Q1`, `Q2`, `Q3`, `Q4`, `FY` |
+| `frame` | VARCHAR | SEC calendar frame, if present |
+| `value` | DOUBLE | Observed value; NULL for discontinued items |
+
+### `data/raw/fundamentals/manifest.json`
+
+| Field | Type | Description |
+|---|---|---|
+| `version` | INT | Manifest schema version |
+| `tickers.<TICKER>.snapshots` | ARRAY | List of `{hash, cik, path, n_facts, n_non_null, n_tags, first_filed, last_filed, written_at}` |
+| `tickers.<TICKER>.latest_hash` | TEXT | Newest hash for quick lookup |

@@ -1,0 +1,14 @@
+# Tickers in the universe that are not SEC reporting companies.
+#
+# SPY is a SPDR S&P 500 ETF Trust. It is a registered investment
+# company under the 1940 Act, not a Securities Exchange Act issuer,
+# and therefore does not file companyfacts with SEC EDGAR in the
+# same way operating companies do. It is still in the price universe
+# (used as the benchmark), but SEC fundamental ingestion is skipped.
+#
+# Format: list of ticker strings. Matching is case-insensitive.
+# Skipped tickers appear in the CLI summary as status="skipped",
+# not "failed".
+
+skip:
+  - SPY

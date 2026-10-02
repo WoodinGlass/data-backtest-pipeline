@@ -47,6 +47,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `high`. Rewritten to modify `volume` instead — still a distinct
   snapshot, but a valid one.
 
+### Added — M3.7 (fundamental ingestion)
+- **`ingestion/sec/` package** for SEC EDGAR XBRL ingestion:
+  - `config.py` — typed `SecSettings`, tag registry loader, skip list.
+  - `schemas.py` — `SecFact`, `SecCompanyFacts`, `sec_facts_hash`.
+  - `client.py` — `SecClient`. Ticker→CIK map (cached), companyfacts
+    fetch, retry with exponential backoff, rate limit at 6.7 req/s.
+    Two hosts: static files at www.sec.gov, XBRL API at data.sec.gov.
+  - `raw_store.py` — immutable Parquet snapshots at
+    data/raw/fundamentals/sec/<ticker>/CIK####__<hash16>.parquet.
+  - `pipeline.py` + `cli.py` — orchestration, `dbp-ingest-sec`.
+- **`config/fundamental_tags.yml`** — 137 unique tags in 6 categories
+  (income statement, balance sheet, cash flow, per share, employees,
+  macro-correlated).
+- **`config/sec_skip_tickers.yml`** — entities that are not SEC
+  reporting companies (SPY and future ETFs).
+- **`make ingest-sec`** target, `dbp-ingest-sec` entry point.
+- **Quality gate** extended with `SecFactsSchema` and `load_sec_facts`;
+  layer name `"sec"` added to `--skip` choices.
+- **45 new unit tests** for SEC modules.
+
+### Fixed (M3.7)
+- **SPY 404 treated as failure.** SPY is an ETF and does not file
+  companyfacts. Skipped via `sec_skip_tickers.yml`, not failed.
+- **SecFactsSchema too strict.** `filed >= period_end` was asserted
+  at the raw layer, but SEC legitimately contains preliminary and
+  forward-looking facts filed before the period ends. Removed from
+  the raw schema; the PIT rule (`filed <= trade_date`) will be
+  enforced in `int_fundamentals_pit` (M3.8).
+
+### Known limitation (M3.7)
+- XOM's ticker resolves to a 2024 reorganization entity
+  (CIK 2115436) with limited history. Union of pre- and post-reorg
+  CIKs is a future improvement.
+
 ### Added — M3.6 (macro warehouse)
 - **dbt staging**: `stg_macro_series` with PIT-effective vintage_date
   for latest-mode series (ADR 0009).

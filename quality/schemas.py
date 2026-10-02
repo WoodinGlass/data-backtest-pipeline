@@ -39,6 +39,7 @@ __all__ = [
     "SCHEMAS",
     "FctReturnsSchema",
     "RawPricesSchema",
+    "SecFactsSchema",
     "StgPricesSchema",
 ]
 
@@ -185,6 +186,72 @@ class FctReturnsSchema(DataFrameModel):
 
 
 # ═══════════════════════════════════════════════════════════
+# Raw fundamentals (SEC EDGAR)
+# ═══════════════════════════════════════════════════════════
+class SecFactsSchema(DataFrameModel):
+    """Contract for the raw SEC fundamental facts layer.
+
+    One row per (ticker, namespace, tag, unit, period_end, filed,
+    form, frame). Includes the PIT key `filed` — the date the fact
+    first appeared in a filing. Nullability mirrors what SEC returns:
+    `period_start` is NULL for point-in-time facts (e.g. balance-sheet
+    values); `value` can be NULL for discontinued segments.
+    """
+
+    ticker: Series[str] = Field(
+        str_matches=r"^[A-Z][A-Z0-9]{0,9}$",
+        description="Uppercase ticker symbol",
+    )
+    cik: Series[int] = Field(ge=0, description="SEC Central Index Key")
+    namespace: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 16},
+    )
+    tag: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 256},
+    )
+    unit: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 32},
+    )
+
+    period_start: Series[pd.Timestamp] = Field(nullable=True)
+    period_end: Series[pd.Timestamp]
+    filed: Series[pd.Timestamp]
+
+    form: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 16},
+    )
+    fiscal_year: Series[int] = Field(nullable=True)
+    fiscal_period: Series[str] = Field(nullable=True)
+    frame: Series[str] = Field(nullable=True)
+    value: Series[float] = Field(nullable=True)
+
+    class Config:
+        strict = True
+        coerce = True
+        ordered = False
+
+    # NOTE on `filed` vs `period_end`
+    # --------------------------------
+    # It is tempting to assert `filed >= period_end` at the raw layer.
+    # In practice SEC XBRL data legitimately contains facts where
+    # `filed < period_end`:
+    #   - preliminary 8-K disclosures of an in-progress period,
+    #   - forward-looking guidance tagged with a future period_end,
+    #   - stub periods and reclassifications.
+    # The raw layer mirrors what SEC returned; enforcement of the PIT
+    # rule (`filed <= trade_date` at consumption time) belongs in the
+    # intermediate layer (`int_fundamentals_pit`, M3.8) as a dbt
+    # singular test, not here.
+
+    @dataframe_check
+    @classmethod
+    def period_start_before_end(cls, df: pd.DataFrame) -> pd.Series:
+        """When period_start is present, it must precede period_end."""
+        ps = df["period_start"]
+        return ps.isna() | (ps <= df["period_end"])
+
+
+# ═══════════════════════════════════════════════════════════
 # Registry
 # ═══════════════════════════════════════════════════════════
 # Name -> schema class. The gate and CLI iterate over this; adding a
@@ -193,4 +260,5 @@ SCHEMAS: dict[str, type[DataFrameModel]] = {
     "raw": RawPricesSchema,
     "staging": StgPricesSchema,
     "marts": FctReturnsSchema,
+    "sec": SecFactsSchema,
 }

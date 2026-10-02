@@ -1,0 +1,191 @@
+# XBRL tag registry for SEC EDGAR fundamental ingestion.
+#
+# Curated set of ~150 tags from the us-gaap and dei namespaces.
+# These are the tags downstream models consume; the raw layer stores
+# every tag returned by the API (full fidelity), but staging filters
+# to this set. See ADR 0010.
+#
+# Format: category -> list of {tag, namespace, title}.
+# namespace is 'us-gaap' or 'dei' (or 'ifrs-full' for foreign filers).
+#
+# Adding a tag: append to the appropriate category. Removing one:
+# delete the line. No code changes required.
+
+metadata:
+  version: 1
+  history_start: "2015-01-01"
+  source: "sec-edgar"
+  # Tags that some companies do not report at all. Presence is
+  # best-effort; downstream features must tolerate NULLs.
+  optional_tags:
+    - InventoryNet
+    - InventoryFinishedGoods
+    - InventoryWorkInProcess
+    - InventoryRawMaterials
+    - ResearchAndDevelopmentExpense
+
+tags:
+
+  # ── Income statement (40) ────────────────────────────────
+  income_statement:
+    - {tag: Revenues, namespace: us-gaap, title: "Revenues"}
+    - {tag: RevenueFromContractWithCustomerExcludingAssessedTax, namespace: us-gaap, title: "Revenue (excl. tax)"}
+    - {tag: RevenueFromContractWithCustomerIncludingAssessedTax, namespace: us-gaap, title: "Revenue (incl. tax)"}
+    - {tag: CostOfRevenue, namespace: us-gaap, title: "Cost of Revenue"}
+    - {tag: CostOfGoodsAndServicesSold, namespace: us-gaap, title: "Cost of Goods & Services Sold"}
+    - {tag: CostOfGoodsSold, namespace: us-gaap, title: "Cost of Goods Sold"}
+    - {tag: GrossProfit, namespace: us-gaap, title: "Gross Profit"}
+    - {tag: ResearchAndDevelopmentExpense, namespace: us-gaap, title: "R&D Expense"}
+    - {tag: SellingGeneralAndAdministrativeExpense, namespace: us-gaap, title: "SG&A Expense"}
+    - {tag: SellingAndMarketingExpense, namespace: us-gaap, title: "Selling & Marketing"}
+    - {tag: GeneralAndAdministrativeExpense, namespace: us-gaap, title: "General & Administrative"}
+    - {tag: OperatingExpenses, namespace: us-gaap, title: "Operating Expenses"}
+    - {tag: CostsAndExpenses, namespace: us-gaap, title: "Total Costs & Expenses"}
+    - {tag: OperatingIncomeLoss, namespace: us-gaap, title: "Operating Income"}
+    - {tag: NonoperatingIncomeExpense, namespace: us-gaap, title: "Nonoperating Income"}
+    - {tag: OtherNonoperatingIncomeExpense, namespace: us-gaap, title: "Other Nonoperating Income"}
+    - {tag: InterestExpense, namespace: us-gaap, title: "Interest Expense"}
+    - {tag: InterestExpenseNonoperating, namespace: us-gaap, title: "Interest Expense (Nonoperating)"}
+    - {tag: InterestExpenseDebt, namespace: us-gaap, title: "Interest Expense on Debt"}
+    - {tag: InterestIncomeExpenseNet, namespace: us-gaap, title: "Interest Income/Expense Net"}
+    - {tag: InvestmentIncomeInterest, namespace: us-gaap, title: "Investment Income Interest"}
+    - {tag: IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest, namespace: us-gaap, title: "Pre-tax Income"}
+    - {tag: IncomeTaxExpenseBenefit, namespace: us-gaap, title: "Income Tax Expense"}
+    - {tag: NetIncomeLoss, namespace: us-gaap, title: "Net Income"}
+    - {tag: ProfitLoss, namespace: us-gaap, title: "Net Income (Profit/Loss)"}
+    - {tag: NetIncomeLossAvailableToCommonStockholdersBasic, namespace: us-gaap, title: "Net Income to Common (Basic)"}
+    - {tag: NetIncomeLossAvailableToCommonStockholdersDiluted, namespace: us-gaap, title: "Net Income to Common (Diluted)"}
+    - {tag: EarningsPerShareBasic, namespace: us-gaap, title: "EPS Basic"}
+    - {tag: EarningsPerShareDiluted, namespace: us-gaap, title: "EPS Diluted"}
+    - {tag: WeightedAverageNumberOfSharesOutstandingBasic, namespace: us-gaap, title: "Shares Outstanding (Basic)"}
+    - {tag: WeightedAverageNumberOfDilutedSharesOutstanding, namespace: us-gaap, title: "Shares Outstanding (Diluted)"}
+    - {tag: CommonStockDividendsPerShareDeclared, namespace: us-gaap, title: "Dividends Declared per Share"}
+    - {tag: CommonStockDividendsPerShareCashPaid, namespace: us-gaap, title: "Dividends Paid per Share"}
+    - {tag: DepreciationDepletionAndAmortization, namespace: us-gaap, title: "Depreciation & Amortization"}
+    - {tag: DepreciationAmortizationAndAccretionNet, namespace: us-gaap, title: "Depreciation & Amortization (Net)"}
+    - {tag: ShareBasedCompensation, namespace: us-gaap, title: "Share-Based Compensation"}
+    - {tag: LaborAndRelatedExpense, namespace: us-gaap, title: "Labor & Related Expense"}
+    - {tag: RestructuringCharges, namespace: us-gaap, title: "Restructuring Charges"}
+    - {tag: IncomeLossFromEquityMethodInvestments, namespace: us-gaap, title: "Equity Method Income"}
+    - {tag: EffectiveIncomeTaxRateContinuingOperations, namespace: us-gaap, title: "Effective Tax Rate"}
+
+  # ── Balance sheet (55) ───────────────────────────────────
+  balance_sheet:
+    - {tag: Assets, namespace: us-gaap, title: "Total Assets"}
+    - {tag: AssetsCurrent, namespace: us-gaap, title: "Current Assets"}
+    - {tag: AssetsNoncurrent, namespace: us-gaap, title: "Noncurrent Assets"}
+    - {tag: CashAndCashEquivalentsAtCarryingValue, namespace: us-gaap, title: "Cash & Equivalents"}
+    - {tag: CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents, namespace: us-gaap, title: "Cash, Equivalents & Restricted"}
+    - {tag: ShortTermInvestments, namespace: us-gaap, title: "Short-Term Investments"}
+    - {tag: MarketableSecuritiesCurrent, namespace: us-gaap, title: "Marketable Securities (Current)"}
+    - {tag: AccountsReceivableNetCurrent, namespace: us-gaap, title: "Accounts Receivable"}
+    - {tag: ReceivablesNetCurrent, namespace: us-gaap, title: "Receivables Net (Current)"}
+    - {tag: InventoryNet, namespace: us-gaap, title: "Inventory (Net)"}
+    - {tag: InventoryFinishedGoods, namespace: us-gaap, title: "Finished Goods Inventory"}
+    - {tag: InventoryRawMaterials, namespace: us-gaap, title: "Raw Materials Inventory"}
+    - {tag: InventoryWorkInProcess, namespace: us-gaap, title: "Work-in-Process Inventory"}
+    - {tag: PrepaidExpenseAndOtherAssetsCurrent, namespace: us-gaap, title: "Prepaid & Other Current"}
+    - {tag: OtherAssetsCurrent, namespace: us-gaap, title: "Other Current Assets"}
+    - {tag: PropertyPlantAndEquipmentNet, namespace: us-gaap, title: "PP&E (Net)"}
+    - {tag: PropertyPlantAndEquipmentGross, namespace: us-gaap, title: "PP&E (Gross)"}
+    - {tag: OperatingLeaseRightOfUseAsset, namespace: us-gaap, title: "Operating Lease ROU Asset"}
+    - {tag: FinanceLeaseRightOfUseAsset, namespace: us-gaap, title: "Finance Lease ROU Asset"}
+    - {tag: Goodwill, namespace: us-gaap, title: "Goodwill"}
+    - {tag: IntangibleAssetsNetExcludingGoodwill, namespace: us-gaap, title: "Intangibles (ex Goodwill)"}
+    - {tag: FiniteLivedIntangibleAssetsNet, namespace: us-gaap, title: "Finite-Lived Intangibles"}
+    - {tag: DeferredIncomeTaxAssetsNet, namespace: us-gaap, title: "Deferred Tax Assets"}
+    - {tag: OtherAssetsNoncurrent, namespace: us-gaap, title: "Other Noncurrent Assets"}
+    - {tag: Liabilities, namespace: us-gaap, title: "Total Liabilities"}
+    - {tag: LiabilitiesCurrent, namespace: us-gaap, title: "Current Liabilities"}
+    - {tag: LiabilitiesNoncurrent, namespace: us-gaap, title: "Noncurrent Liabilities"}
+    - {tag: AccountsPayableCurrent, namespace: us-gaap, title: "Accounts Payable"}
+    - {tag: AccountsPayableAndAccruedLiabilitiesCurrent, namespace: us-gaap, title: "AP & Accrued Liabilities"}
+    - {tag: AccruedLiabilitiesCurrent, namespace: us-gaap, title: "Accrued Liabilities"}
+    - {tag: ContractWithCustomerLiabilityCurrent, namespace: us-gaap, title: "Contract Liability (Current)"}
+    - {tag: DeferredRevenueCurrent, namespace: us-gaap, title: "Deferred Revenue (Current)"}
+    - {tag: DeferredRevenueNoncurrent, namespace: us-gaap, title: "Deferred Revenue (Noncurrent)"}
+    - {tag: CommercialPaper, namespace: us-gaap, title: "Commercial Paper"}
+    - {tag: ShortTermBorrowings, namespace: us-gaap, title: "Short-Term Borrowings"}
+    - {tag: LongTermDebt, namespace: us-gaap, title: "Long-Term Debt"}
+    - {tag: LongTermDebtNoncurrent, namespace: us-gaap, title: "Long-Term Debt (Noncurrent)"}
+    - {tag: LongTermDebtCurrent, namespace: us-gaap, title: "Long-Term Debt (Current)"}
+    - {tag: OperatingLeaseLiability, namespace: us-gaap, title: "Operating Lease Liability"}
+    - {tag: OperatingLeaseLiabilityCurrent, namespace: us-gaap, title: "Operating Lease Liability (Current)"}
+    - {tag: OperatingLeaseLiabilityNoncurrent, namespace: us-gaap, title: "Operating Lease Liability (Noncurrent)"}
+    - {tag: FinanceLeaseLiability, namespace: us-gaap, title: "Finance Lease Liability"}
+    - {tag: DeferredIncomeTaxLiabilitiesNet, namespace: us-gaap, title: "Deferred Tax Liabilities"}
+    - {tag: OtherLiabilitiesNoncurrent, namespace: us-gaap, title: "Other Noncurrent Liabilities"}
+    - {tag: StockholdersEquity, namespace: us-gaap, title: "Stockholders Equity"}
+    - {tag: StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest, namespace: us-gaap, title: "Equity (incl. NCI)"}
+    - {tag: MinorityInterest, namespace: us-gaap, title: "Minority Interest"}
+    - {tag: CommonStockValue, namespace: us-gaap, title: "Common Stock Value"}
+    - {tag: CommonStockSharesIssued, namespace: us-gaap, title: "Common Shares Issued"}
+    - {tag: CommonStockSharesOutstanding, namespace: us-gaap, title: "Common Shares Outstanding"}
+    - {tag: PreferredStockValue, namespace: us-gaap, title: "Preferred Stock"}
+    - {tag: RetainedEarningsAccumulatedDeficit, namespace: us-gaap, title: "Retained Earnings"}
+    - {tag: AccumulatedOtherComprehensiveIncomeLossNetOfTax, namespace: us-gaap, title: "Accumulated OCI"}
+    - {tag: TreasuryStockCommonValue, namespace: us-gaap, title: "Treasury Stock"}
+    - {tag: AdditionalPaidInCapital, namespace: us-gaap, title: "Additional Paid-in Capital"}
+
+  # ── Cash flow (30) ───────────────────────────────────────
+  cash_flow:
+    - {tag: NetCashProvidedByUsedInOperatingActivities, namespace: us-gaap, title: "Cash from Operations"}
+    - {tag: NetCashProvidedByUsedInInvestingActivities, namespace: us-gaap, title: "Cash from Investing"}
+    - {tag: NetCashProvidedByUsedInFinancingActivities, namespace: us-gaap, title: "Cash from Financing"}
+    - {tag: CashAndCashEquivalentsPeriodIncreaseDecrease, namespace: us-gaap, title: "Cash Change"}
+    - {tag: DepreciationDepletionAndAmortization, namespace: us-gaap, title: "D&A (CF)"}
+    - {tag: ShareBasedCompensation, namespace: us-gaap, title: "SBC (CF)"}
+    - {tag: DeferredIncomeTaxExpenseBenefit, namespace: us-gaap, title: "Deferred Tax"}
+    - {tag: IncreaseDecreaseInAccountsReceivable, namespace: us-gaap, title: "Change in AR"}
+    - {tag: IncreaseDecreaseInInventories, namespace: us-gaap, title: "Change in Inventory"}
+    - {tag: IncreaseDecreaseInAccountsPayable, namespace: us-gaap, title: "Change in AP"}
+    - {tag: IncreaseDecreaseInOtherOperatingAssets, namespace: us-gaap, title: "Change in Other Op Assets"}
+    - {tag: IncreaseDecreaseInOtherOperatingLiabilities, namespace: us-gaap, title: "Change in Other Op Liabilities"}
+    - {tag: PaymentsToAcquirePropertyPlantAndEquipment, namespace: us-gaap, title: "Capex"}
+    - {tag: PaymentsToAcquireBusinessesNetOfCashAcquired, namespace: us-gaap, title: "Acquisitions"}
+    - {tag: PaymentsToAcquireInvestments, namespace: us-gaap, title: "Investment Purchases"}
+    - {tag: ProceedsFromSaleMaturityAndCollectionsOfInvestments, namespace: us-gaap, title: "Investment Proceeds"}
+    - {tag: PaymentsForRepurchaseOfCommonStock, namespace: us-gaap, title: "Buybacks"}
+    - {tag: PaymentsOfDividends, namespace: us-gaap, title: "Dividends Paid"}
+    - {tag: PaymentsOfDividendsCommonStock, namespace: us-gaap, title: "Common Dividends Paid"}
+    - {tag: ProceedsFromIssuanceOfCommonStock, namespace: us-gaap, title: "Stock Issuance"}
+    - {tag: ProceedsFromIssuanceOfLongTermDebt, namespace: us-gaap, title: "Debt Issued"}
+    - {tag: ProceedsFromNotesPayable, namespace: us-gaap, title: "Notes Issued"}
+    - {tag: RepaymentsOfLongTermDebt, namespace: us-gaap, title: "Debt Repaid"}
+    - {tag: RepaymentsOfNotesPayable, namespace: us-gaap, title: "Notes Repaid"}
+    - {tag: ProceedsFromRepaymentsOfCommercialPaper, namespace: us-gaap, title: "Commercial Paper Net"}
+    - {tag: ProceedsFromStockOptionsExercised, namespace: us-gaap, title: "Options Exercised"}
+    - {tag: PaymentsForProceedsFromOtherInvestingActivities, namespace: us-gaap, title: "Other Investing"}
+    - {tag: ProceedsFromPaymentsForOtherFinancingActivities, namespace: us-gaap, title: "Other Financing"}
+    - {tag: OtherNoncashIncomeExpense, namespace: us-gaap, title: "Other Non-Cash"}
+    - {tag: IncomeLossFromContinuingOperations, namespace: us-gaap, title: "Income from Continuing Ops"}
+
+  # ── Per-share / shares (4) ───────────────────────────────
+  per_share:
+    - {tag: EarningsPerShareBasic, namespace: us-gaap, title: "EPS Basic"}
+    - {tag: EarningsPerShareDiluted, namespace: us-gaap, title: "EPS Diluted"}
+    - {tag: CommonStockDividendsPerShareDeclared, namespace: us-gaap, title: "DPS Declared"}
+    - {tag: EntityCommonStockSharesOutstanding, namespace: dei, title: "Shares Outstanding (dei)"}
+
+  # ── Employees (best effort) (2) ──────────────────────────
+  employees:
+    - {tag: EntityNumberOfEmployees, namespace: dei, title: "Number of Employees (dei)"}
+    - {tag: NumberOfEmployees, namespace: us-gaap, title: "Number of Employees (us-gaap)"}
+
+  # ── Macro-correlated / misc (15) ─────────────────────────
+  macro_correlated:
+    - {tag: EffectiveIncomeTaxRateContinuingOperations, namespace: us-gaap, title: "Effective Tax Rate"}
+    - {tag: EffectiveIncomeTaxRateReconciliationAtFederalStatutoryIncomeTaxRate, namespace: us-gaap, title: "Federal Statutory Rate"}
+    - {tag: InterestExpenseDebt, namespace: us-gaap, title: "Interest on Debt"}
+    - {tag: ForeignCurrencyTransactionGainLossRealized, namespace: us-gaap, title: "FX Gain/Loss Realized"}
+    - {tag: ForeignCurrencyTransactionGainLossUnrealized, namespace: us-gaap, title: "FX Gain/Loss Unrealized"}
+    - {tag: UnrealizedGainLossOnDerivativesAndHedges, namespace: us-gaap, title: "Unrealized Derivative G/L"}
+    - {tag: IncomeLossFromEquityMethodInvestments, namespace: us-gaap, title: "Equity Method Income (dup)"}
+    - {tag: OperatingLeaseCost, namespace: us-gaap, title: "Operating Lease Cost"}
+    - {tag: RestructuringCharges, namespace: us-gaap, title: "Restructuring (dup)"}
+    - {tag: AssetImpairmentCharges, namespace: us-gaap, title: "Asset Impairment"}
+    - {tag: GoodwillImpairmentLoss, namespace: us-gaap, title: "Goodwill Impairment"}
+    - {tag: LegalSettlementExpense, namespace: us-gaap, title: "Legal Settlements"}
+    - {tag: DefinedBenefitPlanCosts, namespace: us-gaap, title: "Pension Costs"}
+    - {tag: IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic, namespace: us-gaap, title: "Pre-tax Income (Domestic)"}
+    - {tag: IncomeLossFromContinuingOperationsBeforeIncomeTaxesForeign, namespace: us-gaap, title: "Pre-tax Income (Foreign)"}

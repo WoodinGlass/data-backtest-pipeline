@@ -143,3 +143,51 @@ to populate any row is `<= trade_date`.
 - ADR 0006 — content hash excludes vendor noise (applies here as well).
 - ADR 0009 — macro data design (FRED + ALFRED).
 - M1 — ingestion pattern.
+
+## Implementation notes (added 2026-10-02)
+
+Findings from building M3.7.
+
+### SPY (and other ETFs) do not file companyfacts
+
+SPY is a SPDR S&P 500 ETF Trust, registered under the Investment
+Company Act of 1940. It is not a Securities Exchange Act issuer and
+its CIK does not appear in the companyfacts API — it returns 404.
+A generic failure here would be misleading: it is a structural
+non-reporting entity, not an ingestion bug.
+
+Fix: `config/sec_skip_tickers.yml` (currently just SPY). Skipped
+tickers appear in CLI output as `skipped`, not `failed`.
+
+### Ticker CIK can change across corporate reorganizations
+
+XOM's ticker currently resolves to CIK 2115436 ("ExxonMobil Holdings
+Corp"), which only has facts from 2026-07-01 onward — a 2024
+reorganization entity. The historical CIK 34088 ("Exxon Mobil
+Corporation") holds ~20 years of facts but is not what the ticker
+map returns today.
+
+Consequence: for XOM the raw snapshot has limited history. This is
+a known limitation; a future improvement is to support a
+`ticker -> [cik]` mapping so we can union pre- and post-reorg facts.
+
+### The raw layer is a mirror, not a gate
+
+An initial SecFactsSchema asserted `filed >= period_end`. That rule
+is wrong at the raw layer: SEC legitimately contains facts filed
+*before* the period they describe — preliminary 8-K disclosures,
+forward-looking guidance, stub periods. The invariant belongs at
+the *consumption* layer (`int_fundamentals_pit` in M3.8), where
+the correct rule is `filed <= trade_date` for whatever trade date
+the backtest is using.
+
+This is consistent with the general principle stated in ADR 0008:
+each rule lives in exactly one layer, at the layer where its
+semantics are valid. "Raw must be well-formed" and "facts must not
+look ahead" are different rules for different layers.
+
+### Non-company filing entities
+
+Beyond SPY, the universe may eventually include other ETFs,
+indices, or trusts. The skip list mechanism is the correct general
+answer; individual tickers are added as they surface.

@@ -34,6 +34,7 @@ from ingestion.config import Settings, get_settings
 from quality.schemas import (
     FctReturnsSchema,
     RawPricesSchema,
+    SecFactsSchema,
     StgPricesSchema,
 )
 
@@ -43,6 +44,7 @@ __all__ = [
     "discover_tickers_from_raw",
     "load_marts_returns",
     "load_raw_prices",
+    "load_sec_facts",
     "load_staging_prices",
     "run_gate",
 ]
@@ -178,6 +180,29 @@ def load_marts_returns(
         return cast("pd.DataFrame", con.sql("SELECT * FROM marts.fct_returns_daily").fetchdf())
     finally:
         con.close()
+
+
+def load_sec_facts(
+    *,
+    root: Path | str = "./data/raw/fundamentals/sec",
+) -> pd.DataFrame:
+    """Load all SEC fundamental facts from the raw Parquet tree.
+
+    Uses DuckDB to read the glob so we do not materialize each ticker
+    separately.
+    """
+    pattern = f"{root}/*/*.parquet"
+    con = duckdb.connect()
+    try:
+        df = cast(
+            "pd.DataFrame",
+            con.sql(f"SELECT * FROM read_parquet('{pattern}', union_by_name = true)").fetchdf(),
+        )
+    finally:
+        con.close()
+    if df.empty:
+        raise FileNotFoundError(f"No SEC facts found: {pattern}")
+    return df
 
 
 # ═══════════════════════════════════════════════════════════
@@ -329,6 +354,24 @@ def run_gate(
         except Exception as exc:
             res = LayerResult(
                 layer="marts:fct_returns_daily",
+                status="fail",
+                error=f"load failed: {type(exc).__name__}: {exc}",
+            )
+        results.append(res)
+        _log(
+            f"  {res.layer:20s} {res.status.upper():4s}  "
+            f"rows={res.n_rows}  cols={res.n_columns}  "
+            f"{res.duration_ms:.0f}ms"
+        )
+
+    # ── SEC fundamentals (raw Parquet tree) ──────────────────
+    if "sec" not in skip:
+        try:
+            df = load_sec_facts()
+            res = _validate(layer="sec:sec_facts", df=df, schema=SecFactsSchema)
+        except Exception as exc:
+            res = LayerResult(
+                layer="sec:sec_facts",
                 status="fail",
                 error=f"load failed: {type(exc).__name__}: {exc}",
             )
