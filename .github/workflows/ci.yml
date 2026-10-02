@@ -86,11 +86,17 @@ jobs:
         # written it. In CI there is no real ingest; we point at the
         # committed fixture instead. The warehouse was built in the
         # previous step, so staging and marts are available there.
+        #
+        # We skip the `sec` layer in CI for now: SEC fundamentals are
+        # ingested locally but no SEC fixture is committed yet. The
+        # layer will be enabled in CI in M3.8 alongside the fundamental
+        # warehouse and its fixture.
         env:
           RAW_DATA_DIR: tests/fixtures/raw
         run: |
           python -m quality.cli \
             --tickers-from-raw \
+            --skip sec \
             --json reports/quality.json
 
       - name: Upload quality report
