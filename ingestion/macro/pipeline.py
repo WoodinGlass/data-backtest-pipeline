@@ -114,6 +114,7 @@ def ingest_macro_series(
             series.series_id,
             observation_start=start,
             observation_end=end,
+            mode=series.vintage_mode,
         )
     except MacroFetchError as exc:
         log.error(
@@ -186,6 +187,7 @@ def ingest_macro_universe(
     settings: MacroSettings | None = None,
     series: list[MacroSeries] | None = None,
     correlation_id: str | None = None,
+    only_missing: bool = False,
 ) -> MacroIngestSummary:
     """Ingest the curated macro registry (or a provided subset).
 
@@ -207,6 +209,16 @@ def ingest_macro_universe(
     client = client or FredClient(settings=settings)
     store = store or MacroRawStore(settings=settings)
     series = series if series is not None else load_macro_registry()
+
+    if only_missing:
+        before = len(series)
+        series = [s for s in series if not store.list_snapshots(s.series_id)]
+        log.info(
+            "macro_only_missing_filter",
+            before=before,
+            after=len(series),
+            skipped=before - len(series),
+        )
 
     with bind_correlation_id(correlation_id, prefix="macro") as cid:
         log.info(

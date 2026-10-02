@@ -75,15 +75,41 @@ class MacroSeries:
         category: One of the ten curated categories.
     """
 
-    __slots__ = ("category", "series_id", "title")
+    __slots__ = ("category", "series_id", "title", "vintage_mode")
 
-    def __init__(self, *, series_id: str, title: str, category: str) -> None:
+    def __init__(
+        self,
+        *,
+        series_id: str,
+        title: str,
+        category: str,
+        vintage_mode: str = "full",
+    ) -> None:
         self.series_id = series_id
         self.title = title
         self.category = category
+        self.vintage_mode = vintage_mode
 
     def __repr__(self) -> str:  # pragma: no cover — debug convenience
         return f"MacroSeries(id={self.series_id!r}, category={self.category!r})"
+
+
+def _load_latest_only_set(settings: MacroSettings) -> set[str]:
+    """Load the set of series ids that should use latest-only mode.
+
+    Reads ``config/macro_series_latest_only.yml`` next to the main
+    registry. Returns empty set if the file does not exist.
+    """
+    p = settings.macro_series_file.parent / "macro_series_latest_only.yml"
+    if not p.exists():
+        return set()
+    data: Any = yaml.safe_load(p.read_text())
+    if not isinstance(data, dict):
+        return set()
+    series = data.get("series", [])
+    if not isinstance(series, list):
+        return set()
+    return {str(s) for s in series}
 
 
 def load_macro_registry(
@@ -111,6 +137,8 @@ def load_macro_registry(
     if not isinstance(raw, dict) or "series" not in raw:
         raise ValueError(f"Macro registry malformed: {src}")
 
+    latest_only = _load_latest_only_set(settings)
+
     out: list[MacroSeries] = []
     for category, entries in raw["series"].items():
         if not isinstance(entries, list):
@@ -118,11 +146,14 @@ def load_macro_registry(
         for entry in entries:
             if not isinstance(entry, dict) or "id" not in entry:
                 raise ValueError(f"Entry under {category!r} missing 'id': {entry!r}")
+            sid = str(entry["id"])
+            mode = "latest" if sid in latest_only else "full"
             out.append(
                 MacroSeries(
-                    series_id=str(entry["id"]),
-                    title=str(entry.get("title", entry["id"])),
+                    series_id=sid,
+                    title=str(entry.get("title", sid)),
                     category=str(category),
+                    vintage_mode=mode,
                 )
             )
     return out

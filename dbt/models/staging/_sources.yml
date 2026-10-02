@@ -31,3 +31,25 @@ sources:
             description: "Share volume; non-negative."
             data_tests:
               - not_null
+      - name: macro
+        description: >
+          Vintage-aware macro observations, one row per
+          (series_id, observation_date, vintage_date). Files written by
+          ingestion/macro/raw_store.py. See ADR 0009.
+        meta:
+          external_location: "{{ var('raw_macro_glob') }}"
+        columns:
+          - name: series_id
+            description: "FRED series id (e.g. FEDFUNDS)."
+            data_tests:
+              - not_null
+          - name: observation_date
+            description: "The period the value describes."
+            data_tests:
+              - not_null
+          - name: vintage_date
+            description: "FRED vintage date (when this revision became current)."
+            data_tests:
+              - not_null
+          - name: value
+            description: "Observed value; NULL when FRED returned '.'."

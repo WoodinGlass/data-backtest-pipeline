@@ -481,8 +481,8 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 |---|---|---|---|
 | Unit (pytest) | 182 | Pure functions, no external services (default) | none |
 | Integration (pytest) | 10 | Needs network (yfinance) or a warehouse | `@pytest.mark.integration` |
-| dbt schema tests | 47 | Column-level checks in model YAML | — |
-| dbt singular tests | 6 | SQL files under `dbt/tests/` | — |
+| dbt schema tests | ~60 | Column-level checks in model YAML | — |
+| dbt singular tests | ~9 | SQL files under `dbt/tests/` | — |
 | Slow | — | Long-running backtests | `@pytest.mark.slow` |
 
 Counts above reflect M3. They will grow as M3.5–M3.9 add macro and
@@ -594,7 +594,7 @@ Severity policy: schema violation → hard fail; freshness/volume → warning fi
 - [x] **M2:** dbt staging + marts with `not_null`, `unique`, `relationships`, source freshness
 - [x] **M3:** Data quality gate (Pandera); pipeline fails on bad data
 - [x] **M3.5:** Macro ingestion (FRED + ALFRED, ~150 vintage-aware series)
-- [ ] **M3.6:** Macro warehouse (staging, daily PIT forward-fill, marts)
+- [x] **M3.6:** Macro warehouse (staging, daily PIT forward-fill, marts)
 - [ ] **M3.7:** Fundamental ingestion (SEC EDGAR XBRL, ~150 tags + employees)
 - [ ] **M3.8:** Fundamental warehouse (staging, filing-date PIT join, marts)
 - [ ] **M3.9:** Quality gate extension for macro + fundamental layers

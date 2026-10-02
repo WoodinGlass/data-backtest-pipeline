@@ -50,7 +50,14 @@ class FakeClient:
         self._snapshots = snapshots or {}
         self._errors = errors or {}
 
-    def fetch_vintages(self, series_id, *, observation_start, observation_end=None):
+    def fetch_vintages(
+        self,
+        series_id,
+        *,
+        observation_start,
+        observation_end=None,
+        mode="full",
+    ):
         if series_id in self._errors:
             raise self._errors[series_id]
         return self._snapshots.get(series_id, [])

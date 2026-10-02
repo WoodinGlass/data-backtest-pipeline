@@ -43,7 +43,6 @@ series:
     - {id: WCURCIR,        title: "Currency in Circulation"}
     - {id: RRPONTSYD,      title: "Overnight Reverse Repos"}
     - {id: BOGMBASE,       title: "Monetary Base"}
-    - {id: M0SL,           title: "M0 Money Supply"}
     - {id: RESPPLLOPNWW,   title: "Reserve Bank Credit"}
     - {id: WDTGAL,         title: "Deposits with Fed: Treasury General Account"}
     - {id: GFDEBTN,        title: "Federal Debt: Total Public Debt"}
@@ -83,7 +82,6 @@ series:
     - {id: CPIFABSL,       title: "CPI Food and Beverages"}
     - {id: CPIMEDSL,       title: "CPI Medical Care"}
     - {id: CPITRNSL,       title: "CPI Transportation"}
-    - {id: CPISRVRSA,      title: "CPI Services"}
     - {id: CUSR0000SAF11,  title: "CPI Food at Home"}
     - {id: CUSR0000SAH1,   title: "CPI Shelter"}
     - {id: CUSR0000SETB01, title: "CPI Gasoline"}
@@ -92,7 +90,6 @@ series:
     - {id: PCE,            title: "Personal Consumption Expenditures"}
     - {id: PCEC96,         title: "Real PCE"}
     - {id: PPIACO,         title: "PPI All Commodities"}
-    - {id: WPSFD4,         title: "PPI Final Demand"}
     - {id: MICH,           title: "Michigan 1Y Inflation Expectation"}
     - {id: CORESTICKM159SFRBATL, title: "Sticky Price CPI (Atlanta Fed)"}
 
@@ -101,7 +98,6 @@ series:
     - {id: PAYEMS,         title: "Nonfarm Payrolls"}
     - {id: UNRATE,         title: "Unemployment Rate"}
     - {id: U6RATE,         title: "U-6 Unemployment Rate"}
-    - {id: U3RATE,         title: "U-3 Unemployment Rate"}
     - {id: ICSA,           title: "Initial Jobless Claims"}
     - {id: CCSA,           title: "Continuing Jobless Claims"}
     - {id: JTSJOL,         title: "Job Openings (JOLTS)"}
@@ -183,12 +179,7 @@ series:
     - {id: VIXCLS,         title: "CBOE VIX"}
     - {id: VXVCLS,         title: "CBOE 3-Month Volatility"}
     - {id: VXNCLS,         title: "CBOE Nasdaq Volatility"}
-    - {id: UMCSENT1,       title: "Michigan Sentiment (1966 base)"}
-    - {id: NFIB,           title: "NFIB Small Business Optimism"}
-    - {id: NFIBOWN,        title: "NFIB: Good Time to Expand"}
-    - {id: NFIBSALES,      title: "NFIB: Actual Sales"}
     - {id: CSCICP03USM665S, title: "OECD Consumer Confidence US"}
-    - {id: WHOSDIS,        title: "Disposable Personal Income"}
     - {id: DTWEXBGS,       title: "Trade Weighted USD (Broad)"}
 
   # ── International (10) ───────────────────────────────────

@@ -73,6 +73,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="List the registry and exit (no fetch).",
     )
     parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help=(
+            "Skip series that already have at least one snapshot in the "
+            "manifest. Use to resume after a partial run without "
+            "re-fetching everything."
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default=settings.log_level,
@@ -125,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         start=args.start,
         end=args.end,
         series=registry,
+        only_missing=args.only_missing,
     )
 
     print(

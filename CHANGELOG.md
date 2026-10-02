@@ -47,6 +47,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `high`. Rewritten to modify `volume` instead — still a distinct
   snapshot, but a valid one.
 
+### Added — M3.6 (macro warehouse)
+- **dbt staging**: `stg_macro_series` with PIT-effective vintage_date
+  for latest-mode series (ADR 0009).
+- **dbt intermediate**:
+  - `int_macro_vintages` — one row per (series_id, vintage_date);
+    collapses 24M stg rows to ~280K.
+  - `int_macro_daily` — PIT join (asof) to trade_dates. Materialized
+    as TABLE for performance: 67s total, down from 1160s naive.
+- **dbt marts**: `fct_macro_daily` — wide format, 140 macro columns
+  + trade_date. Var-driven column list from `macro_series_ids`.
+- **Singular tests**:
+  - `assert_vintage_consistency` — no duplicate (series, vintage, obs).
+  - `assert_macro_pit` — no look-ahead: vintage/observation <= trade_date.
+  - `assert_macro_columns_count` — column count matches registry.
+- **Utility scripts**:
+  - `scripts/cleanup_macro_raw.py` — dedupe old reconstruction snapshots.
+  - `scripts/cleanup_prices_raw.py` — keep widest snapshot per ticker.
+  - `scripts/sync_macro_var.py` — sync dbt vars with YAML registry.
+
+### Fixed (M3.6)
+- **Latest-mode series were invisible historically.** FRED returns one
+  vintage_date per series for daily data (e.g. 2026-09-30 for DGS10).
+  Naive PIT join excluded them from all prior trade dates. Fixed by
+  setting `vintage_date := observation_date` for these 28 series in
+  staging. See ADR 0009.
+- **Prices staging duplicated after extended ingest.** Append-only raw
+  layer kept both narrow and extended snapshots; glob union produced
+  duplicates. Cleanup script keeps the widest snapshot per ticker.
+
 ### Added — M3.5 (macro ingestion)
 - **`ingestion/macro/` package** for vintage-aware macro ingestion:
   - `config.py` — typed `MacroSettings`, `MacroSeries` registry loader.

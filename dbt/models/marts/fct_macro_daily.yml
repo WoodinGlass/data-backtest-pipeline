@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: fct_macro_daily
+    description: >
+      Wide macro table: one row per trade_date, one column per FRED
+      series (prefix `macro_`, lowercase). Column count is asserted by
+      tests/assert_macro_columns_count.sql.
+    columns:
+      - name: trade_date
+        description: "Trading date."
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_returns_daily')
+                field: trade_date

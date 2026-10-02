@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: stg_macro_series
+    description: >
+      Typed macro observations, one row per
+      (series_id, observation_date, vintage_date). For latest-mode
+      series, `vintage_date` is set equal to `observation_date` (see
+      model comment and ADR 0009). Materialized as a view.
+    columns:
+      - name: series_id
+        description: "FRED series id (e.g. FEDFUNDS)."
+        data_tests:
+          - not_null
+
+      - name: observation_date
+        description: "The period the value describes."
+        data_tests:
+          - not_null
+
+      - name: vintage_date
+        description: >
+          PIT-effective vintage date. For full-mode series this is
+          FRED's vintage_date; for latest-mode series it equals
+          observation_date.
+        data_tests:
+          - not_null
+
+      - name: value
+        description: >
+          Observed value. NULL when FRED returned '.' for a missing
+          period (e.g. a holiday in a daily series).
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - series_id
+              - observation_date
+              - vintage_date

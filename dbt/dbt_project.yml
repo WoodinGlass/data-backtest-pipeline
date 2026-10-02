@@ -45,6 +45,9 @@ seeds:
 vars:
   # Raw Parquet location (relative to CWD when dbt runs, i.e. repo root).
   raw_prices_glob: "data/raw/prices/yfinance/*/*.parquet"
+  # Raw macro Parquet location (M3.6). Overridden in CI to point at
+  # tests/fixtures/raw/macro/fred/.
+  raw_macro_glob: "data/raw/macro/fred/*/*.parquet"
   # Source freshness thresholds in calendar days. This is a coarse
   # check — trading-day-aware freshness arrives with M10.
   freshness_warn_days: 3
@@ -52,3 +55,180 @@ vars:
   # Benchmark ticker used for cross-sectional features and backtest
   # comparison.
   benchmark_ticker: "SPY"
+  # Macro series ids to pivot into wide columns in fct_macro_daily.
+  # Generated from config/macro_series.yml. Regenerate with
+  # `python scripts/sync_macro_var.py` when the registry changes.
+  macro_series_ids:
+    - AWHAETP
+    - BAMLC0A0CM
+    - BAMLH0A0HYM2
+    - BOGMBASE
+    - BUSLOANS
+    - CCSA
+    - CES0500000003
+    - CFNAI
+    - CIVPART
+    - CONSUMER
+    - CORESTICKM159SFRBATL
+    - CPIAUCNS
+    - CPIAUCSL
+    - CPIENGSL
+    - CPIFABSL
+    - CPILFENS
+    - CPILFESL
+    - CPIMEDSL
+    - CPITRNSL
+    - CSCICP03USM665S
+    - CSUSHPINSA
+    - CUSR0000SAF11
+    - CUSR0000SAH1
+    - CUSR0000SETB01
+    - DCOILBRENTEU
+    - DCOILWTICO
+    - DDFUELUSGULF
+    - DEXCAUS
+    - DEXCHUS
+    - DEXINUS
+    - DEXJPUS
+    - DEXMXUS
+    - DEXSDUS
+    - DEXUSEU
+    - DEXUSUK
+    - DFEDTARL
+    - DFEDTARU
+    - DFF
+    - DGS1
+    - DGS10
+    - DGS1MO
+    - DGS2
+    - DGS20
+    - DGS3
+    - DGS30
+    - DGS3MO
+    - DGS5
+    - DGS6MO
+    - DGS7
+    - DHHNGSP
+    - DPRIME
+    - DTWEXAFEGS
+    - DTWEXBGS
+    - DTWEXEMEGS
+    - ECIWAG
+    - EFFR
+    - EMRATIO
+    - EXHOSLUSM495S
+    - FEDFUNDS
+    - GASDESW
+    - GASREGW
+    - GDP
+    - GDPC1
+    - GDPPOT
+    - GFDEBTN
+    - HOUST
+    - HOUST1F
+    - HOUST5F
+    - ICSA
+    - INDPRO
+    - IOER
+    - IORB
+    - IPG211S
+    - IPMAN
+    - IPMINE
+    - IPUTIL
+    - JTSJOL
+    - JTSJOR
+    - JTSLDR
+    - JTSQUR
+    - M1SL
+    - M1V
+    - M2SL
+    - M2V
+    - MANEMP
+    - MCOILWTICO
+    - MEHOINUSA672N
+    - MICH
+    - MORTGAGE15US
+    - MORTGAGE30US
+    - MSPUS
+    - NEWORDER
+    - OBFR
+    - PAYEMS
+    - PCE
+    - PCEC96
+    - PCEPI
+    - PCEPILFE
+    - PERMIT
+    - PERMIT1
+    - PPIACO
+    - RESPPLLOPNWW
+    - RHORUSQ156N
+    - RRPONTSYD
+    - RRSFS
+    - RSAFS
+    - RSXFS
+    - SOFR
+    - SPCS10RSA
+    - SPCS20RSA
+    - T10Y2Y
+    - T10Y3M
+    - T10YFF
+    - T10YIE
+    - T5YIE
+    - T5YIFR
+    - TOTALSL
+    - TOTBKCR
+    - TOTCI
+    - TREAST
+    - U6RATE
+    - UMCSENT
+    - UNRATE
+    - USCONS
+    - USEHS
+    - USFIRE
+    - USMINE
+    - USSLIND
+    - VIXCLS
+    - VXNCLS
+    - VXVCLS
+    - WALCL
+    - WCURCIR
+    - WDTGAL
+    - WEI
+    - WLCFLL
+    - WPU0543
+    - WPU0561
+    - WSHOMCB
+    - WSHOSHO
+  # Series whose single vintage should be treated as
+  # per-observation PIT dates (no revision history).
+  # See ADR 0009 and ingestion/macro/client.py._fetch_latest.
+  macro_latest_mode_ids:
+    - DFEDTARL
+    - DFEDTARU
+    - DFF
+    - DGS1
+    - DGS10
+    - DGS1MO
+    - DGS2
+    - DGS20
+    - DGS3
+    - DGS30
+    - DGS3MO
+    - DGS5
+    - DGS6MO
+    - DGS7
+    - DPRIME
+    - EFFR
+    - EXHOSLUSM495S
+    - OBFR
+    - RRPONTSYD
+    - T10Y2Y
+    - T10Y3M
+    - T10YFF
+    - T10YIE
+    - T5YIE
+    - T5YIFR
+    - VIXCLS
+    - VXNCLS
+    - VXVCLS
+

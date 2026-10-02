@@ -69,3 +69,89 @@ encodes vintage date (human-readable) and content hash (dedup).
 | `version` | INT | Manifest schema version |
 | `series.<SERIES_ID>.snapshots` | ARRAY | List of `{hash, vintage_date, path, n_observations, n_non_null, first_date, last_date, written_at}` |
 | `series.<SERIES_ID>.latest_vintage` | DATE | Newest vintage for quick lookup |
+
+## Macro warehouse (M3.6)
+
+### `staging.stg_macro_series`
+
+One row per (series_id, observation_date, vintage_date). For latest-mode
+series, `vintage_date` equals `observation_date` (PIT-effective).
+
+| Column | Type | Description |
+|---|---|---|
+| `series_id` | VARCHAR | FRED series id |
+| `observation_date` | DATE | Period the value describes |
+| `vintage_date` | DATE | PIT-effective vintage date |
+| `value` | DOUBLE | Observed value; NULL for FRED "." |
+
+### `intermediate.int_macro_vintages`
+
+One row per (series_id, vintage_date): latest observation and its value.
+
+| Column | Type | Description |
+|---|---|---|
+| `series_id` | VARCHAR | FRED series id |
+| `vintage_date` | DATE | Vintage date |
+| `max_obs` | DATE | Latest observation_date in this vintage |
+| `value_at_max_obs` | DOUBLE | Value at max_obs |
+
+### `intermediate.int_macro_daily`
+
+One row per (trade_date, series_id). PIT-correct: `vintage_date <=
+trade_date` and `observation_date <= trade_date`.
+
+| Column | Type | Description |
+|---|---|---|
+| `trade_date` | DATE | Trade date |
+| `series_id` | VARCHAR | FRED series id |
+| `vintage_date` | DATE | Vintage current at trade_date |
+| `observation_date` | DATE | The period the value describes |
+| `value` | DOUBLE | Macro value (may be NULL) |
+
+### `marts.fct_macro_daily`
+
+Wide: one row per trade_date, 140 `macro_<series_id_lowercase>` columns.
+Column list from `macro_series_ids` dbt var.
+
+## Macro warehouse (M3.6)
+
+### `staging.stg_macro_series`
+
+One row per (series_id, observation_date, vintage_date). For latest-mode
+series, `vintage_date` equals `observation_date` (PIT-effective).
+
+| Column | Type | Description |
+|---|---|---|
+| `series_id` | VARCHAR | FRED series id |
+| `observation_date` | DATE | Period the value describes |
+| `vintage_date` | DATE | PIT-effective vintage date |
+| `value` | DOUBLE | Observed value; NULL for FRED "." |
+
+### `intermediate.int_macro_vintages`
+
+One row per (series_id, vintage_date): latest observation and its value.
+
+| Column | Type | Description |
+|---|---|---|
+| `series_id` | VARCHAR | FRED series id |
+| `vintage_date` | DATE | Vintage date |
+| `max_obs` | DATE | Latest observation_date in this vintage |
+| `value_at_max_obs` | DOUBLE | Value at max_obs |
+
+### `intermediate.int_macro_daily`
+
+One row per (trade_date, series_id). PIT-correct: `vintage_date <=
+trade_date` and `observation_date <= trade_date`.
+
+| Column | Type | Description |
+|---|---|---|
+| `trade_date` | DATE | Trade date |
+| `series_id` | VARCHAR | FRED series id |
+| `vintage_date` | DATE | Vintage current at trade_date |
+| `observation_date` | DATE | The period the value describes |
+| `value` | DOUBLE | Macro value (may be NULL) |
+
+### `marts.fct_macro_daily`
+
+Wide: one row per trade_date, 140 `macro_<series_id_lowercase>` columns.
+Column list from `macro_series_ids` dbt var.

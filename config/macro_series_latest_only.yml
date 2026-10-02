@@ -1,0 +1,53 @@
+# Series that should be fetched as a single "latest snapshot"
+# instead of the full vintage history. Two reasons:
+#
+# 1. Daily series (DFF, DGS*, T10Y*, VIX*, etc.) have >2000 vintage
+#    dates. FRED rejects such requests with a 400 error:
+#    "There are N vintage dates in the specified real-time period".
+#    Point-in-time value at any date equals the latest (no revisions).
+#
+# 2. A few series exist only in FRED, not ALFRED, so the vintage
+#    endpoint returns "The series does not exist in ALFRED" (400).
+#
+# In both cases, fetching a single snapshot is the correct behavior.
+# See ADR 0009.
+series:
+  # ── Daily treasury rates and spreads ─────────────────────
+  - DGS1MO
+  - DGS3MO
+  - DGS6MO
+  - DGS1
+  - DGS2
+  - DGS3
+  - DGS5
+  - DGS7
+  - DGS10
+  - DGS20
+  - DGS30
+  - T10Y2Y
+  - T10Y3M
+  - T10YFF
+  - T10YIE
+  - T5YIE
+  - T5YIFR
+  - DPRIME
+
+  # ── Daily policy rates ───────────────────────────────────
+  - DFF
+  - EFFR
+  - OBFR
+  - DFEDTARU
+  - DFEDTARL
+  - RRPONTSYD
+
+  # ── Daily volatility indices ─────────────────────────────
+  - VIXCLS
+  - VXNCLS
+  - VXVCLS
+
+  # ── Weekly sentiment ─────────────────────────────────────
+
+  # ── FRED-only (not in ALFRED) ────────────────────────────
+  - EXHOSLUSM495S
+
+  # ── NFIB series (issue TBD; use latest) ──────────────────

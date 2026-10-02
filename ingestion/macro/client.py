@@ -106,8 +106,9 @@ class FredClient:
         *,
         observation_start: date,
         observation_end: date | None = None,
+        mode: str = "full",
     ) -> list[MacroSnapshot]:
-        """Fetch every vintage of ``series_id`` in the given window.
+        """Fetch vintages of ``series_id`` in the given window.
 
         Args:
             series_id: FRED series id.
@@ -123,6 +124,15 @@ class FredClient:
         Raises:
             MacroFetchError: on HTTP errors or malformed responses.
         """
+        if mode == "latest":
+            return self._fetch_latest(
+                series_id,
+                observation_start=observation_start,
+                observation_end=observation_end,
+            )
+        if mode != "full":
+            raise ValueError(f"unknown vintage mode: {mode!r}")
+
         params: dict[str, Any] = {
             "series_id": series_id,
             "file_type": "json",
@@ -201,6 +211,67 @@ class FredClient:
                 )
             )
         return snapshots
+
+    def _fetch_latest(
+        self,
+        series_id: str,
+        *,
+        observation_start: date,
+        observation_end: date | None = None,
+    ) -> list[MacroSnapshot]:
+        """Fetch a single snapshot: observations as of the latest update.
+
+        Used for series that either (a) have too many vintages for FRED
+        to return in one request, or (b) exist only in FRED, not ALFRED.
+        The resulting snapshot has ``vintage_date = max(observation_date)``
+        and carries no revision history.
+
+        See ``config/macro_series_latest_only.yml`` and ADR 0009.
+        """
+        params: dict[str, Any] = {
+            "series_id": series_id,
+            "file_type": "json",
+            "observation_start": observation_start.isoformat(),
+        }
+        if observation_end is not None:
+            params["observation_end"] = observation_end.isoformat()
+
+        data = self._get_json("/fred/series/observations", params)
+        raw_obs = data.get("observations") or []
+        if not raw_obs:
+            return []
+
+        rows: list[tuple[date, Any]] = []
+        for row in raw_obs:
+            obs_date = _parse_date(row.get("date"))
+            if obs_date is None:
+                continue
+            rows.append((obs_date, row.get("value")))
+
+        if not rows:
+            return []
+
+        vintage_date = max(d for d, _ in rows)
+        observations: list[MacroObservation] = []
+        for obs_date, value in rows:
+            try:
+                obs = MacroObservation(
+                    series_id=series_id,
+                    observation_date=obs_date,
+                    value=value,
+                    vintage_date=vintage_date,
+                )
+            except Exception:
+                continue
+            observations.append(obs)
+
+        return [
+            MacroSnapshot(
+                series_id=series_id,
+                vintage_date=vintage_date,
+                observations=sorted(observations, key=lambda o: o.observation_date),
+            )
+        ]
 
     # ── Internals ───────────────────────────────────────────
     def _rate_limit(self) -> None:

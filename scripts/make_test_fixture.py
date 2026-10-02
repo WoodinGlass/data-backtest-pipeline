@@ -1,13 +1,8 @@
 """Generate a small deterministic raw-layer fixture for CI.
 
-Reads the local raw layer (produced by `make ingest`), picks a small
-subset of tickers and dates, and writes an equivalent Parquet layout
-under tests/fixtures/raw/prices/yfinance/.
-
-The fixture is committed to the repo so that CI can run `dbt build`
-without hitting the network. It is a *snapshot of the raw layer's
-shape*, not of any specific market data — the numbers change only if
-the raw layer format changes.
+Reads the local raw layers (prices + macro) and writes a small subset
+under tests/fixtures/raw/. The fixture is committed so CI can run
+`dbt build` and the quality gate without network access.
 
 Usage:
     python scripts/make_test_fixture.py
@@ -15,78 +10,121 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 from pathlib import Path
 
 import duckdb
 
-# ── Configuration ───────────────────────────────────────────
-FIXTURE_TICKERS = ["AAPL", "MSFT", "SPY"]  # SPY needed for benchmark tests
-FIXTURE_START = "2024-01-02"
-FIXTURE_END = "2024-01-31"
+# ── Prices fixture ─────────────────────────────────────────
+PRICES_TICKERS = ["AAPL", "MSFT", "SPY"]  # SPY needed for benchmark tests
+PRICES_START = "2024-01-02"
+PRICES_END = "2024-01-31"
+PRICES_SRC_GLOB = "data/raw/prices/yfinance/*/*.parquet"
+PRICES_DEST_ROOT = Path("tests/fixtures/raw/prices/yfinance")
 
-SRC_GLOB = "data/raw/prices/yfinance/*/*.parquet"
-DEST_ROOT = Path("tests/fixtures/raw/prices/yfinance")
+# ── Macro fixture ──────────────────────────────────────────
+# Mix of full-mode (FEDFUNDS, CPIAUCSL, PAYEMS) and latest-mode (DGS10).
+MACRO_SERIES = ["FEDFUNDS", "DGS10", "CPIAUCSL", "PAYEMS"]
+MACRO_SRC_ROOT = Path("data/raw/macro/fred")
+MACRO_DEST_ROOT = Path("tests/fixtures/raw/macro/fred")
 
 
-def main() -> int:
+def write_prices_fixture() -> int:
+    """Copy a small prices subset. Returns total rows written."""
     src = Path("data/raw/prices/yfinance")
     if not src.exists():
-        print(f"ERROR: {src} not found. Run `make ingest` first.")
-        return 1
+        print("ERROR: data/raw/prices/yfinance not found. Run `make ingest` first.")
+        return -1
 
-    # Clean destination
-    if DEST_ROOT.exists():
-        shutil.rmtree(DEST_ROOT)
-    DEST_ROOT.mkdir(parents=True, exist_ok=True)
+    if PRICES_DEST_ROOT.exists():
+        shutil.rmtree(PRICES_DEST_ROOT)
+    PRICES_DEST_ROOT.mkdir(parents=True, exist_ok=True)
 
-    # Read subset from source
-    print(f"Reading from {SRC_GLOB}")
     con = duckdb.connect()
-
-    placeholders = ", ".join(f"'{t}'" for t in FIXTURE_TICKERS)
-    query = f"""
+    placeholders = ", ".join(f"'{t}'" for t in PRICES_TICKERS)
+    df = con.sql(
+        f"""
         SELECT *
-        FROM read_parquet('{SRC_GLOB}', union_by_name = true)
+        FROM read_parquet('{PRICES_SRC_GLOB}', union_by_name = true)
         WHERE ticker IN ({placeholders})
-          AND date BETWEEN DATE '{FIXTURE_START}' AND DATE '{FIXTURE_END}'
-    """
-    df = con.sql(query).fetchdf()
+          AND date BETWEEN DATE '{PRICES_START}' AND DATE '{PRICES_END}'
+        """
+    ).fetchdf()
     con.close()
 
     if df.empty:
-        print("ERROR: query returned no rows")
-        return 1
+        print("ERROR: prices query returned no rows")
+        return -1
 
-    total_rows = 0
+    total = 0
     for ticker, group in df.groupby("ticker"):
-        out_dir = DEST_ROOT / ticker
+        out_dir = PRICES_DEST_ROOT / ticker
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_file = out_dir / "fixture.parquet"
-        group.reset_index(drop=True).to_parquet(out_file, index=False)
+        group.reset_index(drop=True).to_parquet(out_dir / "fixture.parquet", index=False)
         n = len(group)
-        total_rows += n
-        print(f"  {ticker}: {n} rows -> {out_file}")
+        total += n
+        print(f"  prices {ticker}: {n} rows")
 
-    # Copy the manifest too, so it is consistent with the fixture
-    src_manifest = Path("data/raw/prices/manifest.json")
-    dest_manifest_dir = Path("tests/fixtures/raw/prices")
-    dest_manifest_dir.mkdir(parents=True, exist_ok=True)
-    if src_manifest.exists():
-        # Keep only entries for the fixture tickers
-        import json
-
-        manifest = json.loads(src_manifest.read_text())
+    # Copy manifest (subset)
+    manifest_src = Path("data/raw/prices/manifest.json")
+    if manifest_src.exists():
+        manifest = json.loads(manifest_src.read_text())
         manifest["tickers"] = {
-            t: v for t, v in manifest.get("tickers", {}).items() if t in FIXTURE_TICKERS
+            t: v for t, v in manifest.get("tickers", {}).items() if t in PRICES_TICKERS
         }
-        (dest_manifest_dir / "manifest.json").write_text(
+        (PRICES_DEST_ROOT.parent / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True)
         )
-        print(f"  manifest.json copied (tickers={sorted(manifest['tickers'])})")
+    return total
 
-    print(f"\nFixture written: {total_rows} rows across {len(FIXTURE_TICKERS)} tickers")
+
+def write_macro_fixture() -> int:
+    """Copy the latest vintage of each macro fixture series."""
+    if not MACRO_SRC_ROOT.exists():
+        print("  WARN: data/raw/macro/fred not found; skipping macro fixture")
+        return 0
+
+    if MACRO_DEST_ROOT.exists():
+        shutil.rmtree(MACRO_DEST_ROOT)
+    MACRO_DEST_ROOT.mkdir(parents=True, exist_ok=True)
+
+    n = 0
+    for series_id in MACRO_SERIES:
+        sdir = MACRO_SRC_ROOT / series_id
+        if not sdir.exists():
+            print(f"  macro {series_id}: NOT FOUND (skipping)")
+            continue
+        files = sorted(sdir.glob("*.parquet"))
+        if not files:
+            print(f"  macro {series_id}: no snapshots (skipping)")
+            continue
+        # Latest vintage only (smallest fixture)
+        latest = files[-1]
+        dest = MACRO_DEST_ROOT / series_id / "fixture.parquet"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(latest, dest)
+        n += 1
+        print(f"  macro {series_id}: {latest.name}")
+    return n
+
+
+def main() -> int:
+    print("Generating test fixture...")
+    print()
+    n_prices = write_prices_fixture()
+    if n_prices < 0:
+        return 1
+
+    print()
+    n_macro = write_macro_fixture()
+
+    print()
+    print(
+        f"Fixture written: {n_prices} price rows across "
+        f"{len(PRICES_TICKERS)} tickers, {n_macro} macro series"
+    )
     return 0
 
 

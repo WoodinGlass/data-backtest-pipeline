@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: int_macro_daily
+    description: >
+      Point-in-time macro values on trading days. One row per
+      (trade_date, series_id). Materialized as a TABLE because the
+      underlying stg_macro_series has ~24M rows.
+    columns:
+      - name: trade_date
+        description: "Trading date at which the value was known."
+        data_tests:
+          - not_null
+
+      - name: series_id
+        description: "FRED series id."
+        data_tests:
+          - not_null
+
+      - name: vintage_date
+        description: >
+          The vintage that was current on trade_date (i.e. the last
+          vintage published on or before trade_date). Enforced by
+          tests/assert_macro_pit.sql.
+        data_tests:
+          - not_null
+
+      - name: observation_date
+        description: >
+          The period the value describes. Guaranteed to be <= trade_date
+          by construction; the singular test verifies it.
+
+      - name: value
+        description: "Macro value; may be NULL when FRED returned '.'."
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - trade_date
+              - series_id

@@ -126,3 +126,52 @@ later than the trade date.
 - ADR 0006 — content hash excludes vendor noise.
 - ADR 0010 — fundamental data design (SEC EDGAR XBRL).
 - M1 — the ingestion pattern this ADR extends.
+
+## Implementation notes (added 2026-10-02)
+
+Three real-world findings from building M3.6:
+
+### Latest-mode series need a PIT-effective vintage date
+
+FRED returns a *single* vintage_date for daily series (DGS10, VIXCLS,
+DFF, ...) — the date of the most recent refresh (e.g. 2026-09-30).
+Using this directly in a PIT join makes those 28 series invisible to
+any backtest before that date.
+
+Fix: in `stg_macro_series`, for latest-mode series only (see
+`macro_latest_mode_ids` var), set `vintage_date := observation_date`.
+These series are never revised; the value for day D is published on D
+(same-day for treasury rates, next business day at most for VIX). This
+is the correct conservative choice for t+1 equity prediction using
+data known at end of t.
+
+### Naive PIT join is O(trade_dates x staging_rows)
+
+The first version of `int_macro_daily` cross-joined 2,954 trade_dates
+against 24M staging rows and took ~19 minutes. The final design
+decomposes:
+
+1. `int_macro_vintages` collapses staging to one row per
+   (series_id, vintage_date) with its latest observation and value.
+   ~280K rows.
+2. `int_macro_daily` does an ASOF join of trade_dates × distinct
+   series to find the current vintage, then a filtered second scan of
+   staging for the (rare) projection series case (GDPPOT, IORB, IOER).
+
+Total: ~67s. 17× faster.
+
+### Append-only raw layer needs retention
+
+The raw layer is append-only by design (ADR 0006). Re-ingesting with a
+wider window leaves the older snapshot on disk, and downstream glob
+reads duplicate data. Cleanup scripts (`scripts/cleanup_*_raw.py`)
+keep the widest snapshot per ticker/series. This is a stopgap; a
+retention policy is M10 work.
+
+### Known limitation: number of vintages for daily series
+
+Full-vintage ingestion for daily series (DGS*, DEX*, DFF, etc.) would
+require 5000+ vintage dates per series, exceeding FRED's per-request
+limit. Latest-mode is the correct workaround *because those series are
+not revised*. For future work, a hybrid strategy (full vintage for
+monthly/quarterly, latest for daily) is already what we implement.

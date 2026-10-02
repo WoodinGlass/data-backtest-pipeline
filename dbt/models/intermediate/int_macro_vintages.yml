@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: int_macro_vintages
+    description: >
+      One row per (series_id, vintage_date), with the latest
+      observation and its value for that vintage. Materialized as
+      TABLE for fast repeated joins. ~280K rows.
+    columns:
+      - name: series_id
+        description: "FRED series id."
+        data_tests:
+          - not_null
+
+      - name: vintage_date
+        description: "Vintage date."
+        data_tests:
+          - not_null
+
+      - name: max_obs
+        description: "Latest observation_date in this vintage."
+        data_tests:
+          - not_null
+
+      - name: value_at_max_obs
+        description: "Value at max_obs (may be NULL for '.'-only periods)."
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - series_id
+              - vintage_date
