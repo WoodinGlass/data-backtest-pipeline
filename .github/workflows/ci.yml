@@ -73,9 +73,13 @@ jobs:
         run: mkdir -p data
 
       - name: dbt build (against committed fixture)
+        # Override raw_prices_glob AND raw_macro_glob so dbt reads the
+        # small committed fixtures under tests/fixtures/ instead of the
+        # gitignored local raw layers. Keeps CI hermetic: no yfinance,
+        # no FRED, no network, deterministic.
         run: |
           dbt build --project-dir dbt --profiles-dir dbt \
-            --vars '{"raw_prices_glob": "tests/fixtures/raw/prices/yfinance/*/*.parquet"}'
+            --vars '{"raw_prices_glob": "tests/fixtures/raw/prices/yfinance/*/*.parquet", "raw_macro_glob": "tests/fixtures/raw/macro/fred/*/*.parquet"}'
 
       - name: Quality gate (raw + staging + marts)
         # The gate reads the raw layer from where ingestion would have
