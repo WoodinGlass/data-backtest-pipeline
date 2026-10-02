@@ -68,8 +68,10 @@ def _marts_df(n: int = 3) -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════
 # Registry
 # ═══════════════════════════════════════════════════════════
-def test_schemas_registry_has_three_layers() -> None:
-    assert set(SCHEMAS.keys()) == {"raw", "staging", "marts"}
+def test_schemas_registry_has_expected_layers() -> None:
+    # Four layers: raw prices, staging, marts, and raw SEC fundamentals.
+    # Adding a new layer means updating this set and the SCHEMAS dict.
+    assert set(SCHEMAS.keys()) == {"raw", "staging", "marts", "sec"}
 
 
 def test_registry_classes_match_imports() -> None:
