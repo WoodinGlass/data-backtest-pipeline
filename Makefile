@@ -1,4 +1,4 @@
-.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci
+.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci ingest-macro install-all
 
 
 help:  ## Show this help
@@ -6,6 +6,9 @@ help:  ## Show this help
 
 install:  ## Install package with dev extras
 	pip install -e ".[dev,dbt,quality,tracking,orchestration,app]"
+
+install-all:  ## Install package with all extras (recommended for Colab/dev)
+	pip install -e ".[dev,dbt,quality,tracking,orchestration,app,integration,observability,snowflake]"
 
 lint:  ## Run ruff and mypy
 	ruff check .
@@ -38,6 +41,9 @@ ci:  ## Run the full CI suite locally (lint + test + dbt + quality)
 
 test-all:  ## Run all tests with coverage
 	pytest --cov --cov-report=term-missing
+
+ingest-macro:  ## Fetch macro series into the raw layer
+	python -m ingestion.macro.cli
 
 ingest:  ## Fetch daily bars into the raw layer (START=YYYY-MM-DD END=YYYY-MM-DD)
 	python -m ingestion.cli $(if $(START),--start $(START)) $(if $(END),--end $(END))

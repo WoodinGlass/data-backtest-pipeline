@@ -1,0 +1,205 @@
+# Macro series registry for data-backtest-pipeline.
+#
+# Curated set of FRED series ingested via ALFRED (vintage-aware).
+# See ADR 0009 for the design rationale.
+#
+# Format: category -> list of {id: <FRED series id>, title: <short label>}.
+# The full FRED title and metadata are fetched at ingestion time from
+# the `/fred/series` endpoint; we do not duplicate them here.
+#
+# Adding a series: append to the appropriate category. Removing one:
+# delete the line. No code changes required.
+
+metadata:
+  version: 1
+  history_start: "2015-01-01"
+  source: "fred"
+  # Series that are known to have sparse vintage history. The ingestion
+  # client will still request all vintages; downstream PIT joins must
+  # tolerate gaps.
+  sparse_vintage_ok:
+    - SOFR
+    - OBFR
+    - EFFR
+    - IORB
+
+series:
+
+  # ── Monetary policy (20) ─────────────────────────────────
+  monetary_policy:
+    - {id: FEDFUNDS,       title: "Fed Funds Effective Rate (Monthly)"}
+    - {id: DFF,            title: "Fed Funds Effective Rate (Daily)"}
+    - {id: DFEDTARU,       title: "Fed Funds Target Range — Upper"}
+    - {id: DFEDTARL,       title: "Fed Funds Target Range — Lower"}
+    - {id: EFFR,           title: "Effective Fed Funds Rate"}
+    - {id: OBFR,           title: "Overnight Bank Funding Rate"}
+    - {id: SOFR,           title: "Secured Overnight Financing Rate"}
+    - {id: IORB,           title: "Interest on Reserve Balances"}
+    - {id: IOER,           title: "Interest on Excess Reserves (legacy)"}
+    - {id: WALCL,          title: "Fed Total Assets"}
+    - {id: WLCFLL,         title: "Fed Loans and Leases"}
+    - {id: WSHOSHO,        title: "Securities Held Outright"}
+    - {id: TREAST,         title: "Treasury Deposits with Fed"}
+    - {id: WCURCIR,        title: "Currency in Circulation"}
+    - {id: RRPONTSYD,      title: "Overnight Reverse Repos"}
+    - {id: BOGMBASE,       title: "Monetary Base"}
+    - {id: M0SL,           title: "M0 Money Supply"}
+    - {id: RESPPLLOPNWW,   title: "Reserve Bank Credit"}
+    - {id: WDTGAL,         title: "Deposits with Fed: Treasury General Account"}
+    - {id: GFDEBTN,        title: "Federal Debt: Total Public Debt"}
+
+  # ── Rates / Yield curve (22) ─────────────────────────────
+  rates:
+    - {id: DGS1MO,         title: "1-Month Treasury"}
+    - {id: DGS3MO,         title: "3-Month Treasury"}
+    - {id: DGS6MO,         title: "6-Month Treasury"}
+    - {id: DGS1,           title: "1-Year Treasury"}
+    - {id: DGS2,           title: "2-Year Treasury"}
+    - {id: DGS3,           title: "3-Year Treasury"}
+    - {id: DGS5,           title: "5-Year Treasury"}
+    - {id: DGS7,           title: "7-Year Treasury"}
+    - {id: DGS10,          title: "10-Year Treasury"}
+    - {id: DGS20,          title: "20-Year Treasury"}
+    - {id: DGS30,          title: "30-Year Treasury"}
+    - {id: T10Y2Y,         title: "10Y-2Y Spread"}
+    - {id: T10Y3M,         title: "10Y-3M Spread"}
+    - {id: T10YFF,         title: "10Y-Fed Funds Spread"}
+    - {id: T5YIFR,         title: "5Y Forward Inflation Rate"}
+    - {id: T10YIE,         title: "10Y Breakeven Inflation"}
+    - {id: T5YIE,          title: "5Y Breakeven Inflation"}
+    - {id: DPRIME,         title: "Bank Prime Loan Rate"}
+    - {id: MORTGAGE30US,   title: "30-Year Fixed Mortgage"}
+    - {id: MORTGAGE15US,   title: "15-Year Fixed Mortgage"}
+    - {id: BAMLH0A0HYM2,   title: "US High Yield OAS"}
+    - {id: BAMLC0A0CM,     title: "US Corporate OAS"}
+
+  # ── Inflation (20) ───────────────────────────────────────
+  inflation:
+    - {id: CPIAUCSL,       title: "CPI All Urban (SA)"}
+    - {id: CPIAUCNS,       title: "CPI All Urban (NSA)"}
+    - {id: CPILFESL,       title: "Core CPI (SA)"}
+    - {id: CPILFENS,       title: "Core CPI (NSA)"}
+    - {id: CPIENGSL,       title: "CPI Energy"}
+    - {id: CPIFABSL,       title: "CPI Food and Beverages"}
+    - {id: CPIMEDSL,       title: "CPI Medical Care"}
+    - {id: CPITRNSL,       title: "CPI Transportation"}
+    - {id: CPISRVRSA,      title: "CPI Services"}
+    - {id: CUSR0000SAF11,  title: "CPI Food at Home"}
+    - {id: CUSR0000SAH1,   title: "CPI Shelter"}
+    - {id: CUSR0000SETB01, title: "CPI Gasoline"}
+    - {id: PCEPI,          title: "PCE Price Index"}
+    - {id: PCEPILFE,       title: "Core PCE Price Index"}
+    - {id: PCE,            title: "Personal Consumption Expenditures"}
+    - {id: PCEC96,         title: "Real PCE"}
+    - {id: PPIACO,         title: "PPI All Commodities"}
+    - {id: WPSFD4,         title: "PPI Final Demand"}
+    - {id: MICH,           title: "Michigan 1Y Inflation Expectation"}
+    - {id: CORESTICKM159SFRBATL, title: "Sticky Price CPI (Atlanta Fed)"}
+
+  # ── Employment (20) ──────────────────────────────────────
+  employment:
+    - {id: PAYEMS,         title: "Nonfarm Payrolls"}
+    - {id: UNRATE,         title: "Unemployment Rate"}
+    - {id: U6RATE,         title: "U-6 Unemployment Rate"}
+    - {id: U3RATE,         title: "U-3 Unemployment Rate"}
+    - {id: ICSA,           title: "Initial Jobless Claims"}
+    - {id: CCSA,           title: "Continuing Jobless Claims"}
+    - {id: JTSJOL,         title: "Job Openings (JOLTS)"}
+    - {id: JTSJOR,         title: "Job Openings Rate"}
+    - {id: JTSQUR,         title: "Quits Rate"}
+    - {id: JTSLDR,         title: "Layoffs and Discharges Rate"}
+    - {id: AWHAETP,        title: "Avg Weekly Hours"}
+    - {id: CES0500000003,  title: "Avg Hourly Earnings"}
+    - {id: ECIWAG,         title: "Employment Cost Index"}
+    - {id: MANEMP,         title: "Manufacturing Employment"}
+    - {id: USCONS,         title: "Construction Employment"}
+    - {id: USMINE,         title: "Mining/Logging Employment"}
+    - {id: USFIRE,         title: "Financial Activities Employment"}
+    - {id: USEHS,          title: "Education/Health Employment"}
+    - {id: CIVPART,        title: "Labor Force Participation Rate"}
+    - {id: EMRATIO,        title: "Employment-Population Ratio"}
+
+  # ── Growth (17) ──────────────────────────────────────────
+  growth:
+    - {id: GDP,            title: "Nominal GDP"}
+    - {id: GDPC1,          title: "Real GDP"}
+    - {id: GDPPOT,         title: "Real Potential GDP"}
+    - {id: INDPRO,         title: "Industrial Production"}
+    - {id: IPMAN,          title: "IP: Manufacturing"}
+    - {id: IPMINE,         title: "IP: Mining"}
+    - {id: IPUTIL,         title: "IP: Utilities"}
+    - {id: RSAFS,          title: "Retail Sales"}
+    - {id: RRSFS,          title: "Real Retail Sales"}
+    - {id: RSXFS,          title: "Retail Sales ex Food Services"}
+    - {id: HOUST,          title: "Housing Starts"}
+    - {id: HOUST1F,        title: "Single-Family Housing Starts"}
+    - {id: PERMIT,         title: "Building Permits"}
+    - {id: UMCSENT,        title: "Michigan Consumer Sentiment"}
+    - {id: CFNAI,          title: "Chicago Fed National Activity Index"}
+    - {id: USSLIND,        title: "Leading Index (Philly Fed)"}
+    - {id: WEI,            title: "Weekly Economic Index (NY Fed)"}
+
+  # ── Money & Credit (10) ──────────────────────────────────
+  money_credit:
+    - {id: M1SL,           title: "M1 Money Stock"}
+    - {id: M2SL,           title: "M2 Money Stock"}
+    - {id: M1V,            title: "M1 Velocity"}
+    - {id: M2V,            title: "M2 Velocity"}
+    - {id: BUSLOANS,       title: "Commercial and Industrial Loans"}
+    - {id: CONSUMER,       title: "Consumer Loans"}
+    - {id: TOTALSL,        title: "Total Consumer Credit"}
+    - {id: TOTBKCR,        title: "Bank Credit: All Commercial Banks"}
+    - {id: TOTCI,          title: "Commercial and Industrial Loans (All Banks)"}
+    - {id: WSHOMCB,        title: "Mortgage-Backed Securities Held"}
+
+  # ── Housing (10) ─────────────────────────────────────────
+  housing:
+    - {id: CSUSHPINSA,     title: "Case-Shiller Home Price Index"}
+    - {id: SPCS20RSA,      title: "Case-Shiller 20-City"}
+    - {id: SPCS10RSA,      title: "Case-Shiller 10-City"}
+    - {id: HOUST5F,        title: "5+ Unit Housing Starts"}
+    - {id: PERMIT1,        title: "Single-Family Permits"}
+    - {id: EXHOSLUSM495S,  title: "Existing Home Sales"}
+    - {id: RHORUSQ156N,    title: "Homeownership Rate"}
+    - {id: MSPUS,          title: "Median Sales Price (US)"}
+    - {id: MEHOINUSA672N,  title: "Real Median Household Income"}
+    - {id: NEWORDER,       title: "New Orders: Consumer Goods"}
+
+  # ── Energy (10) ──────────────────────────────────────────
+  energy:
+    - {id: DCOILWTICO,     title: "WTI Crude Oil"}
+    - {id: DCOILBRENTEU,   title: "Brent Crude Oil"}
+    - {id: DHHNGSP,        title: "Henry Hub Natural Gas"}
+    - {id: GASREGW,        title: "Weekly US Regular Gasoline"}
+    - {id: GASDESW,        title: "Weekly US Diesel"}
+    - {id: DDFUELUSGULF,   title: "Gulf Coast Jet Fuel"}
+    - {id: MCOILWTICO,     title: "WTI Crude Monthly"}
+    - {id: IPG211S,        title: "IP: Oil and Gas Extraction"}
+    - {id: WPU0561,        title: "PPI: Crude Petroleum"}
+    - {id: WPU0543,        title: "PPI: Gasoline"}
+
+  # ── Sentiment / Volatility (10) ──────────────────────────
+  sentiment:
+    - {id: VIXCLS,         title: "CBOE VIX"}
+    - {id: VXVCLS,         title: "CBOE 3-Month Volatility"}
+    - {id: VXNCLS,         title: "CBOE Nasdaq Volatility"}
+    - {id: UMCSENT1,       title: "Michigan Sentiment (1966 base)"}
+    - {id: NFIB,           title: "NFIB Small Business Optimism"}
+    - {id: NFIBOWN,        title: "NFIB: Good Time to Expand"}
+    - {id: NFIBSALES,      title: "NFIB: Actual Sales"}
+    - {id: CSCICP03USM665S, title: "OECD Consumer Confidence US"}
+    - {id: WHOSDIS,        title: "Disposable Personal Income"}
+    - {id: DTWEXBGS,       title: "Trade Weighted USD (Broad)"}
+
+  # ── International (10) ───────────────────────────────────
+  international:
+    - {id: DEXUSEU,        title: "USD/EUR Exchange Rate"}
+    - {id: DEXJPUS,        title: "JPY/USD Exchange Rate"}
+    - {id: DEXCHUS,        title: "CNY/USD Exchange Rate"}
+    - {id: DEXUSUK,        title: "USD/GBP Exchange Rate"}
+    - {id: DEXCAUS,        title: "CAD/USD Exchange Rate"}
+    - {id: DEXMXUS,        title: "MXN/USD Exchange Rate"}
+    - {id: DEXINUS,        title: "INR/USD Exchange Rate"}
+    - {id: DTWEXAFEGS,     title: "Trade Weighted USD (AFE)"}
+    - {id: DTWEXEMEGS,     title: "Trade Weighted USD (Emerging)"}
+    - {id: DEXSDUS,        title: "USD/SDR Exchange Rate"}

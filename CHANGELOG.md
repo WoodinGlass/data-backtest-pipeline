@@ -47,6 +47,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `high`. Rewritten to modify `volume` instead — still a distinct
   snapshot, but a valid one.
 
+### Added — M3.5 (macro ingestion)
+- **`ingestion/macro/` package** for vintage-aware macro ingestion:
+  - `config.py` — typed `MacroSettings`, `MacroSeries` registry loader.
+  - `schemas.py` — `MacroObservation`, `MacroSnapshot`, `macro_snapshot_hash`.
+  - `client.py` — `FredClient` (FRED + ALFRED). One request per series
+    using the `realtime_start=1776-07-04` sentinel; reconstructs
+    cumulative vintages by interval join.
+  - `raw_store.py` — immutable Parquet snapshots at
+    `data/raw/macro/fred/<SERIES_ID>/<vintage>__<hash16>.parquet`
+    with a JSON manifest.
+  - `pipeline.py` + `cli.py` — end-to-end orchestration, `dbp-ingest-macro`.
+- **`config/macro_series.yml`** — 149 curated FRED series across 10
+  categories (monetary_policy, rates, inflation, employment, growth,
+  money_credit, housing, energy, sentiment, international).
+- **`make install-all`**, `make ingest-macro` targets.
+- **47 new unit tests** (schemas, client, raw_store, pipeline, CLI).
+  All mock-based; no network in CI.
+
 ### Added — M3 (data quality gate)
 - **`quality/` package** with Pandera schemas at each layer boundary:
   - `RawPricesSchema` — raw Parquet contracts (ticker, OHLCV).

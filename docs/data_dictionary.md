@@ -47,3 +47,25 @@ Planned marts:
 - `fct_prices_daily` — cleaned, typed daily bars
 - `fct_returns_daily` — log returns + labels (`next_return_positive`)
 - `fct_predictions` — model predictions per `(ticker, date)`
+
+## Raw macro layer (M3.5)
+
+### `data/raw/macro/fred/<SERIES_ID>/<vintage>__<hash16>.parquet`
+
+Each file is one vintage snapshot of one FRED series. Filename
+encodes vintage date (human-readable) and content hash (dedup).
+
+| Column | Type | Description | Notes |
+|---|---|---|---|
+| `series_id` | TEXT | FRED series id (e.g. `FEDFUNDS`) | Part of idempotency key |
+| `observation_date` | DATE | The period the value describes | |
+| `value` | DOUBLE | The observed value; NULL for missing (FRED's ".") | |
+| `vintage_date` | DATE | FRED's vintage date (when this revision became current) | Part of idempotency key |
+
+### `data/raw/macro/manifest.json`
+
+| Field | Type | Description |
+|---|---|---|
+| `version` | INT | Manifest schema version |
+| `series.<SERIES_ID>.snapshots` | ARRAY | List of `{hash, vintage_date, path, n_observations, n_non_null, first_date, last_date, written_at}` |
+| `series.<SERIES_ID>.latest_vintage` | DATE | Newest vintage for quick lookup |
