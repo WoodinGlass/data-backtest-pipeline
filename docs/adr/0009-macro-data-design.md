@@ -175,3 +175,72 @@ require 5000+ vintage dates per series, exceeding FRED's per-request
 limit. Latest-mode is the correct workaround *because those series are
 not revised*. For future work, a hybrid strategy (full vintage for
 monthly/quarterly, latest for daily) is already what we implement.
+
+## Latest-mode expansion (added 2025-10-03)
+
+### Context
+
+Full-vintage ingestion for daily FRED series is prohibitively
+expensive. During the M3.6 build we found that 30 daily series
+(mostly DEX* exchange rates and daily commodity spot prices) were
+responsible for the bulk of the raw layer:
+
+| Group                  | Series | Vintages each | Rows each |
+|------------------------|--------|---------------|-----------|
+| Exchange rates (DEX*)  | 8      | ~613          | ~1.9M     |
+| Trade-weighted USD     | 3      | ~400          | ~1.2M     |
+| Energy spot (DCOIL*,..)| 4      | ~605          | ~1.8M     |
+| SOFR + IOER            | 2      | ~1600         | ~2M       |
+
+Aggregate: **~17 series, ~10,500 files, ~200 MB**, producing
+**~17.6M rows** in `stg_macro_series` — 75% of the staging table.
+
+### Decision
+
+Extend `config/macro_series_latest_only.yml` from 28 to 45 series.
+The 17 added series are daily AND non-revised:
+
+- Exchange rates (DEXSDUS, DEXCHUS, DEXUSUK, DEXMXUS, DEXUSEU,
+  DEXCAUS, DEXJPUS, DEXINUS).
+- Trade-weighted USD indices (DTWEXBGS, DTWEXEMEGS, DTWEXAFEGS).
+- Daily spot commodity prices (DCOILBRENTEU, DCOILWTICO,
+  DDFUELUSGULF, DHHNGSP).
+- Daily overnight rates (SOFR, IOER).
+
+All are published once per business day, not subsequently revised
+to a degree that matters for equity-direction prediction.
+
+### Implementation
+
+1. Add the 17 series to `macro_series_latest_only.yml`.
+2. Delete all raw snapshots for those 17 series (11,731 files,
+   199.5 MB) and their manifest entries.
+3. Re-ingest in latest mode: each series now produces exactly one
+   snapshot covering the full history.
+4. Rebuild `stg_macro_series` and downstream models.
+
+### Consequence
+
+| Metric                       | Before    | After    | Δ      |
+|------------------------------|-----------|----------|--------|
+| Raw macro files              | ~36,000   | ~24,500  | −32%   |
+| Raw macro size on disk       | 320 MB    | 120 MB   | −62%   |
+| `stg_macro_series` rows      | 23.7M     | 5.9M     | −75%   |
+| Macro full ingest time       | ~115 min  | ~15 min  | −87%   |
+| `int_macro_daily` rows       | 394K      | 350K     | −11%   |
+
+The `int_macro_daily` decrease is expected and correct: a handful
+of early-2015 trade dates now have no historical value for the
+promoted series because no observation exists at that date, and the
+PIT rule forbids forward-filling from the future. We would rather
+report NULL than fabricate a value.
+
+### Future work
+
+`config/macro_series_latest_only.yml` will keep growing as we
+identify more daily non-revised series. The principle is simple:
+
+> If a series has no meaningful revision history and is published
+> at daily frequency, use latest mode. Reserve full vintage for
+> economic series that FRED actually revises (CPI, PAYEMS, GDP,
+> rates that get restated, etc.).

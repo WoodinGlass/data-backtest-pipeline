@@ -47,6 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `high`. Rewritten to modify `volume` instead — still a distinct
   snapshot, but a valid one.
 
+### Changed — M3.9.5 (DEX and daily series optimization)
+- **Extended latest-mode from 28 to 45 series.** Added 17 daily,
+  non-revised FRED series to `macro_series_latest_only.yml`:
+  exchange rates (DEX*), trade-weighted USD indices (DTWEX*), daily
+  commodity spot prices (DCOIL*, DHHNGSP, DDFUELUSGULF), and SOFR +
+  IOER. See ADR 0009.
+
+### Removed — M3.9.5
+- Deleted 11,731 raw Parquet files (199.5 MB) for the 17 promoted
+  series and their manifest entries, then re-ingested each as a
+  single latest-mode snapshot.
+
+### Effect (M3.9.5)
+- `stg_macro_series`: 23.7M -> 5.9M rows (-75%).
+- Raw macro layer on disk: 320 MB -> 120 MB (-62%).
+- Full macro ingest: ~115 min -> ~15 min (-87%).
+- `int_macro_daily`: 394K -> 350K rows (-11%). The decrease is
+  correct: early trade dates without historical observations now
+  return NULL, consistent with the PIT rule.
+
 ### Added — M3.8 (fundamental warehouse)
 - **`staging.stg_sec_facts`** — typed SEC facts, 1:1 with raw.
 - **`intermediate.int_fundamentals_pit`** — PIT-correct

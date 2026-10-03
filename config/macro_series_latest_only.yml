@@ -51,3 +51,20 @@ series:
   - EXHOSLUSM495S
 
   # ── NFIB series (issue TBD; use latest) ──────────────────
+  - DEXSDUS
+  - DEXCHUS
+  - DEXUSUK
+  - DEXMXUS
+  - DEXUSEU
+  - DEXCAUS
+  - DEXJPUS
+  - DEXINUS
+  - DTWEXEMEGS
+  - DTWEXBGS
+  - DTWEXAFEGS
+  - DCOILBRENTEU
+  - DCOILWTICO
+  - DDFUELUSGULF
+  - DHHNGSP
+  - SOFR
+  - IOER
