@@ -9,8 +9,13 @@ import pytest
 from quality.schemas import (
     SCHEMAS,
     FctReturnsSchema,
+    IntFundamentalsPitSchema,
+    IntMacroDailySchema,
     RawPricesSchema,
+    SecFactsSchema,
+    StgMacroSeriesSchema,
     StgPricesSchema,
+    StgSecFactsSchema,
 )
 
 # ─── constants ──────────────────────────────────────────────
@@ -69,9 +74,19 @@ def _marts_df(n: int = 3) -> pd.DataFrame:
 # Registry
 # ═══════════════════════════════════════════════════════════
 def test_schemas_registry_has_expected_layers() -> None:
-    # Four layers: raw prices, staging, marts, and raw SEC fundamentals.
+    # Eight layers now: raw prices, staging, marts, raw SEC facts,
+    # macro staging, macro intermediate, SEC staging, SEC intermediate.
     # Adding a new layer means updating this set and the SCHEMAS dict.
-    assert set(SCHEMAS.keys()) == {"raw", "staging", "marts", "sec"}
+    assert set(SCHEMAS.keys()) == {
+        "raw",
+        "staging",
+        "marts",
+        "sec",
+        "stg_macro",
+        "int_macro",
+        "stg_sec",
+        "int_fundamentals",
+    }
 
 
 def test_registry_classes_match_imports() -> None:
@@ -196,3 +211,168 @@ def test_marts_empty_sector_rejected() -> None:
     df.loc[0, "sector"] = ""
     with pytest.raises(SCHEMA_ERRORS):
         FctReturnsSchema.validate(df, lazy=False)
+
+
+# ═══════════════════════════════════════════════════════════
+# Macro schemas
+# ═══════════════════════════════════════════════════════════
+def _macro_df(n: int = 3) -> pd.DataFrame:
+    """Well-formed stg_macro_series frame."""
+    return pd.DataFrame(
+        {
+            "series_id": ["FEDFUNDS"] * n,
+            "observation_date": pd.to_datetime([date(2024, 1, 1 + i) for i in range(n)]),
+            "vintage_date": pd.to_datetime([date(2024, 2, 1 + i) for i in range(n)]),
+            "value": [5.33, 5.33, 5.34][:n],
+        }
+    )
+
+
+def test_stg_macro_valid_passes() -> None:
+    StgMacroSeriesSchema.validate(_macro_df(), lazy=False)
+
+
+def test_stg_macro_allows_null_value() -> None:
+    df = _macro_df()
+    df.loc[0, "value"] = None
+    StgMacroSeriesSchema.validate(df, lazy=False)
+
+
+def test_stg_macro_rejects_short_series_id() -> None:
+    df = _macro_df()
+    df.loc[0, "series_id"] = ""
+    with pytest.raises(SCHEMA_ERRORS):
+        StgMacroSeriesSchema.validate(df, lazy=False)
+
+
+def _int_macro_df(n: int = 3) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "trade_date": pd.to_datetime([date(2024, 3, 1 + i) for i in range(n)]),
+            "series_id": ["FEDFUNDS"] * n,
+            "vintage_date": pd.to_datetime([date(2024, 2, 15 + i) for i in range(n)]),
+            "observation_date": pd.to_datetime([date(2024, 2, 1)] * n),
+            "value": [5.33] * n,
+        }
+    )
+
+
+def test_int_macro_valid_passes() -> None:
+    IntMacroDailySchema.validate(_int_macro_df(), lazy=False)
+
+
+def test_int_macro_rejects_vintage_in_future() -> None:
+    df = _int_macro_df()
+    df.loc[0, "vintage_date"] = df.loc[0, "trade_date"] + pd.Timedelta(days=1)
+    with pytest.raises(SCHEMA_ERRORS):
+        IntMacroDailySchema.validate(df, lazy=False)
+
+
+def test_int_macro_rejects_observation_in_future() -> None:
+    df = _int_macro_df()
+    df.loc[0, "observation_date"] = df.loc[0, "trade_date"] + pd.Timedelta(days=1)
+    with pytest.raises(SCHEMA_ERRORS):
+        IntMacroDailySchema.validate(df, lazy=False)
+
+
+# ═══════════════════════════════════════════════════════════
+# SEC staging + intermediate
+# ═══════════════════════════════════════════════════════════
+def _stg_sec_df(n: int = 3) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ticker": ["AAPL"] * n,
+            "cik": [320193] * n,
+            "namespace": ["us-gaap"] * n,
+            "tag": ["Revenues"] * n,
+            "unit": ["USD"] * n,
+            "period_start": pd.to_datetime([date(2024, 1, 1)] * n),
+            "period_end": [pd.Timestamp("2024-03-31") + pd.Timedelta(days=j) for j in range(n)],
+            "filed": pd.to_datetime([date(2024, 5, 3)] * n),
+            "form": ["10-Q"] * n,
+            "fiscal_year": [2024] * n,
+            "fiscal_period": ["Q2"] * n,
+            "frame": ["CY2024Q1"] * n,
+            "value": [1.0, 2.0, 3.0][:n],
+        }
+    )
+
+
+def test_stg_sec_valid_passes() -> None:
+    StgSecFactsSchema.validate(_stg_sec_df(), lazy=False)
+
+
+def test_stg_sec_rejects_lowercase_ticker() -> None:
+    df = _stg_sec_df()
+    df.loc[0, "ticker"] = "aapl"
+    with pytest.raises(SCHEMA_ERRORS):
+        StgSecFactsSchema.validate(df, lazy=False)
+
+
+def test_stg_sec_rejects_period_start_after_end() -> None:
+    df = _stg_sec_df()
+    df.loc[0, "period_start"] = df.loc[0, "period_end"] + pd.Timedelta(days=1)
+    with pytest.raises(SCHEMA_ERRORS):
+        StgSecFactsSchema.validate(df, lazy=False)
+
+
+def _int_fund_df(n: int = 3) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "trade_date": pd.to_datetime([date(2024, 6, 1 + i) for i in range(n)]),
+            "ticker": ["AAPL"] * n,
+            "namespace": ["us-gaap"] * n,
+            "tag": ["Revenues"] * n,
+            "value": [1.0, 2.0, 3.0][:n],
+            "filed_used": pd.to_datetime([date(2024, 5, 3)] * n),
+            "period_end_used": pd.to_datetime([date(2024, 3, 31)] * n),
+        }
+    )
+
+
+def test_int_fund_valid_passes() -> None:
+    IntFundamentalsPitSchema.validate(_int_fund_df(), lazy=False)
+
+
+def test_int_fund_allows_null_when_no_filing() -> None:
+    df = _int_fund_df()
+    df.loc[0, "value"] = None
+    df.loc[0, "filed_used"] = None
+    df.loc[0, "period_end_used"] = None
+    IntFundamentalsPitSchema.validate(df, lazy=False)
+
+
+def test_int_fund_rejects_filing_in_future() -> None:
+    df = _int_fund_df()
+    df.loc[0, "filed_used"] = df.loc[0, "trade_date"] + pd.Timedelta(days=1)
+    with pytest.raises(SCHEMA_ERRORS):
+        IntFundamentalsPitSchema.validate(df, lazy=False)
+
+
+def test_int_fund_rejects_period_after_filing() -> None:
+    df = _int_fund_df()
+    df.loc[0, "period_end_used"] = df.loc[0, "filed_used"] + pd.Timedelta(days=1)
+    with pytest.raises(SCHEMA_ERRORS):
+        IntFundamentalsPitSchema.validate(df, lazy=False)
+
+
+def test_int_fund_rejects_period_in_future() -> None:
+    df = _int_fund_df()
+    df.loc[0, "period_end_used"] = df.loc[0, "trade_date"] + pd.Timedelta(days=1)
+    with pytest.raises(SCHEMA_ERRORS):
+        IntFundamentalsPitSchema.validate(df, lazy=False)
+
+
+# ═══════════════════════════════════════════════════════════
+# Negative tests on SecFactsSchema (existing)
+# ═══════════════════════════════════════════════════════════
+def test_sec_schema_allows_filed_before_period_end() -> None:
+    """Regression: preliminary 8-K disclosures may predate period_end.
+
+    See ADR 0011 implementation notes: the raw layer mirrors what SEC
+    returned; PIT enforcement lives in intermediate.
+    """
+    df = _stg_sec_df()
+    df.loc[0, "filed"] = df.loc[0, "period_end"] - pd.Timedelta(days=10)
+    # Must NOT raise: this is legitimate SEC data.
+    SecFactsSchema.validate(df, lazy=False)

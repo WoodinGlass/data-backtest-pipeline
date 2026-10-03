@@ -61,7 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip",
         nargs="+",
         default=[],
-        choices=["raw", "staging", "marts", "sec"],
+        choices=[
+            "raw",
+            "staging",
+            "marts",
+            "sec",
+            "stg_macro",
+            "int_macro",
+            "stg_sec",
+            "int_fundamentals",
+        ],
         help="Skip specific layers.",
     )
     parser.add_argument(

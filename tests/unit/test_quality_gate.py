@@ -122,8 +122,22 @@ def test_validate_fail_on_invalid_frame() -> None:
 # ═══════════════════════════════════════════════════════════
 # run_gate — hermetic (skip all layers)
 # ═══════════════════════════════════════════════════════════
+ALL_LAYERS = frozenset(
+    {
+        "raw",
+        "staging",
+        "marts",
+        "sec",
+        "stg_macro",
+        "int_macro",
+        "stg_sec",
+        "int_fundamentals",
+    }
+)
+
+
 def test_run_gate_with_all_layers_skipped() -> None:
-    report = run_gate(skip={"raw", "staging", "marts", "sec"})
+    report = run_gate(skip=set(ALL_LAYERS))
     assert report.exit_code == 0
     assert report.results == []
     assert report.duration_seconds >= 0
@@ -132,7 +146,7 @@ def test_run_gate_with_all_layers_skipped() -> None:
 def test_run_gate_with_missing_ticker_fails() -> None:
     report = run_gate(
         tickers=["NOTAREALTICKER999"],
-        skip={"staging", "marts", "sec"},
+        skip={"staging", "marts", "sec", "stg_macro", "int_macro", "stg_sec", "int_fundamentals"},
     )
     assert report.exit_code == 1
     assert len(report.failed) == 1

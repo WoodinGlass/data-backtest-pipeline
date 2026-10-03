@@ -38,9 +38,13 @@ from pandera.typing import Series
 __all__ = [
     "SCHEMAS",
     "FctReturnsSchema",
+    "IntFundamentalsPitSchema",
+    "IntMacroDailySchema",
     "RawPricesSchema",
     "SecFactsSchema",
+    "StgMacroSeriesSchema",
     "StgPricesSchema",
+    "StgSecFactsSchema",
 ]
 
 
@@ -252,6 +256,188 @@ class SecFactsSchema(DataFrameModel):
 
 
 # ═══════════════════════════════════════════════════════════
+# Macro staging + intermediate
+# ═══════════════════════════════════════════════════════════
+class StgMacroSeriesSchema(DataFrameModel):
+    """Contract for `staging.stg_macro_series`.
+
+    One row per (series_id, observation_date, vintage_date). For
+    latest-mode series, `vintage_date` equals `observation_date`
+    (see ADR 0009). `value` may be NULL when FRED returned "." for
+    a missing period (e.g. a holiday in a daily series).
+    """
+
+    series_id: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 64},
+        description="FRED series id",
+    )
+    observation_date: Series[datetime] = Field(
+        description="Period the value describes",
+    )
+    vintage_date: Series[datetime] = Field(
+        description="PIT-effective vintage date",
+    )
+    value: Series[float] = Field(nullable=True)
+
+    class Config:
+        strict = True
+        coerce = True
+        ordered = False
+
+    # NOTE: no check that `vintage_date >= observation_date`.
+    # --------------------------------------------------------
+    # It is tempting to assert that a value cannot be known before
+    # its period starts. That rule is wrong for projection series
+    # like GDPPOT (Real Potential GDP), IORB, IOER: FRED publishes
+    # projected values for future periods under a single present-day
+    # vintage. On a given vintage (say 2024-03-15) the vintage
+    # legitimately carries observations up to 2036.
+    #
+    # Staging mirrors what FRED returned. The PIT rule that matters
+    # is enforced at consumption: `int_macro_daily` requires both
+    # `vintage_date <= trade_date` and `observation_date <= trade_date`
+    # per (trade_date, series_id). See ADR 0009.
+
+
+class IntMacroDailySchema(DataFrameModel):
+    """Contract for `intermediate.int_macro_daily`.
+
+    One row per (trade_date, series_id). The PIT rule enforced here is
+    that both `vintage_date` and `observation_date` are <= `trade_date`:
+    a trader on T could only have seen macro data published on or
+    before T, and only for periods that had already happened.
+    """
+
+    trade_date: Series[datetime] = Field(description="Trading date")
+    series_id: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 64},
+    )
+    vintage_date: Series[datetime] = Field(
+        description="Vintage current at trade_date",
+    )
+    observation_date: Series[datetime] = Field(
+        description="Period the value describes",
+    )
+    value: Series[float] = Field(nullable=True)
+
+    class Config:
+        strict = True
+        coerce = True
+        ordered = False
+
+    @dataframe_check
+    @classmethod
+    def vintage_not_in_future(cls, df: pd.DataFrame) -> pd.Series:
+        """No vintage from after the trade date (no look-ahead)."""
+        return df["vintage_date"] <= df["trade_date"]
+
+    @dataframe_check
+    @classmethod
+    def observation_not_in_future(cls, df: pd.DataFrame) -> pd.Series:
+        """No observation from a period that had not happened yet."""
+        return df["observation_date"] <= df["trade_date"]
+
+
+# ═══════════════════════════════════════════════════════════
+# SEC staging + intermediate
+# ═══════════════════════════════════════════════════════════
+class StgSecFactsSchema(DataFrameModel):
+    """Contract for `staging.stg_sec_facts`.
+
+    One row per SEC XBRL fact, 1:1 with raw. No tag filtering, no PIT
+    filtering: those live in intermediate (ADR 0010). We only require
+    the columns a downstream consumer must not be missing.
+    """
+
+    ticker: Series[str] = Field(
+        str_matches=r"^[A-Z][A-Z0-9]{0,9}$",
+    )
+    cik: Series[int] = Field(ge=0)
+    namespace: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 16},
+    )
+    tag: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 256},
+    )
+    unit: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 32},
+    )
+    period_start: Series[datetime] = Field(nullable=True)
+    period_end: Series[datetime]
+    filed: Series[datetime]
+    form: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 16},
+    )
+    fiscal_year: Series[int] = Field(nullable=True)
+    fiscal_period: Series[str] = Field(nullable=True)
+    frame: Series[str] = Field(nullable=True)
+    value: Series[float] = Field(nullable=True)
+
+    class Config:
+        strict = True
+        coerce = True
+        ordered = False
+
+    @dataframe_check
+    @classmethod
+    def period_start_before_end(cls, df: pd.DataFrame) -> pd.Series:
+        """When period_start is present, it must not exceed period_end."""
+        ps = df["period_start"]
+        return ps.isna() | (ps <= df["period_end"])
+
+
+class IntFundamentalsPitSchema(DataFrameModel):
+    """Contract for `intermediate.int_fundamentals_pit`.
+
+    One row per (ticker, trade_date, namespace, tag). The PIT rule:
+    every fact used must have been filed on or before trade_date, and
+    its period must have ended by that date. `value` is NULL when the
+    ticker had not yet filed any fact for that tag.
+    """
+
+    trade_date: Series[datetime] = Field(description="Trading date")
+    ticker: Series[str] = Field(
+        str_matches=r"^[A-Z][A-Z0-9]{0,9}$",
+    )
+    namespace: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 16},
+    )
+    tag: Series[str] = Field(
+        str_length={"min_value": 1, "max_value": 256},
+    )
+    value: Series[float] = Field(nullable=True)
+    filed_used: Series[datetime] = Field(nullable=True)
+    period_end_used: Series[datetime] = Field(nullable=True)
+
+    class Config:
+        strict = True
+        coerce = True
+        ordered = False
+
+    @dataframe_check
+    @classmethod
+    def filed_not_in_future(cls, df: pd.DataFrame) -> pd.Series:
+        """No filing from a date after trade_date."""
+        fu = df["filed_used"]
+        return fu.isna() | (fu <= df["trade_date"])
+
+    @dataframe_check
+    @classmethod
+    def period_not_after_filing(cls, df: pd.DataFrame) -> pd.Series:
+        """The period must have closed before the fact was filed."""
+        pe = df["period_end_used"]
+        fu = df["filed_used"]
+        return pe.isna() | fu.isna() | (pe <= fu)
+
+    @dataframe_check
+    @classmethod
+    def period_not_in_future(cls, df: pd.DataFrame) -> pd.Series:
+        """The period must have closed before trade_date."""
+        pe = df["period_end_used"]
+        return pe.isna() | (pe <= df["trade_date"])
+
+
+# ═══════════════════════════════════════════════════════════
 # Registry
 # ═══════════════════════════════════════════════════════════
 # Name -> schema class. The gate and CLI iterate over this; adding a
@@ -261,4 +447,8 @@ SCHEMAS: dict[str, type[DataFrameModel]] = {
     "staging": StgPricesSchema,
     "marts": FctReturnsSchema,
     "sec": SecFactsSchema,
+    "stg_macro": StgMacroSeriesSchema,
+    "int_macro": IntMacroDailySchema,
+    "stg_sec": StgSecFactsSchema,
+    "int_fundamentals": IntFundamentalsPitSchema,
 }
