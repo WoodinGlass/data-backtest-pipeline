@@ -652,7 +652,7 @@ prediction.
 - [x] **M3.9:** Quality gate extension for macro + fundamental layers
 - [x] **M3.9.5:** Daily-series optimization (latest-mode expansion)
 - [ ] **M4:** Point-in-time features (prices + macro + fundamental), anti-leakage tests
-- [ ] **M4.5:** ADR 0012 — risk framework (entry, staking, limits; user-defined formulas)
+- [ ] **M4.5:** ADR 0013 — risk framework (entry, staking, limits; user-defined formulas)
 - [ ] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration
 - [ ] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions)
 - [ ] **M7:** Prefect orchestration with failure alerts
