@@ -47,6 +47,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `high`. Rewritten to modify `volume` instead — still a distinct
   snapshot, but a valid one.
 
+### Added — M3.8 (fundamental warehouse)
+- **`staging.stg_sec_facts`** — typed SEC facts, 1:1 with raw.
+- **`intermediate.int_fundamentals_pit`** — PIT-correct
+  fundamentals on trade dates. 12.5M rows. Materialized as TABLE.
+  See ADR 0010.
+- **Singular test** `assert_fundamentals_pit` — no look-ahead.
+- **dbt vars** `raw_sec_glob` and `fundamental_tags` (137 tags).
+- **`raw.sec` source** in `_sources.yml`.
+
+### Fixed (M3.8)
+- **Out of Memory in `int_fundamentals_pit`.** Monolithic build
+  OOM'd at 5.5 GiB. Fixed by partitioning by year (UNION), replacing
+  window functions with `GROUP BY arg_max`, and setting explicit
+  `memory_limit` + `temp_directory` in `pre_hook`. See ADR 0011.
+- **Test used an unstable tag for era checks.** AAPL stopped
+  reporting `Revenues` after 2018 (ASC 606); the era test switched
+  to `NetIncomeLoss`, which is reported consistently.
+
 ### Added — M3.7 (fundamental ingestion)
 - **`ingestion/sec/` package** for SEC EDGAR XBRL ingestion:
   - `config.py` — typed `SecSettings`, tag registry loader, skip list.

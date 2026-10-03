@@ -186,3 +186,43 @@ No PIT enforcement at this layer (see ADR 0010 implementation notes).
 | `version` | INT | Manifest schema version |
 | `tickers.<TICKER>.snapshots` | ARRAY | List of `{hash, cik, path, n_facts, n_non_null, n_tags, first_filed, last_filed, written_at}` |
 | `tickers.<TICKER>.latest_hash` | TEXT | Newest hash for quick lookup |
+
+## Fundamental warehouse (M3.8)
+
+### `staging.stg_sec_facts`
+
+Typed SEC facts, 1:1 with raw. No filtering; no PIT enforcement.
+
+| Column | Type | Description |
+|---|---|---|
+| `ticker` | VARCHAR | Ticker symbol |
+| `cik` | BIGINT | SEC Central Index Key |
+| `namespace` | VARCHAR | `us-gaap`, `dei`, ... |
+| `tag` | VARCHAR | XBRL tag name |
+| `unit` | VARCHAR | `USD`, `shares`, ... |
+| `period_start` | DATE | NULL for point-in-time facts |
+| `period_end` | DATE | Period the fact describes |
+| `filed` | DATE | Date the fact first appeared |
+| `form` | VARCHAR | `10-K`, `10-Q`, `8-K`, ... |
+| `fiscal_year` | INT | SEC fiscal year label |
+| `fiscal_period` | VARCHAR | `Q1`..`Q4`, `FY` |
+| `frame` | VARCHAR | SEC calendar frame |
+| `value` | DOUBLE | May be NULL |
+
+### `intermediate.int_fundamentals_pit`
+
+One row per (ticker, trade_date, namespace, tag). For each pair, the
+value from the latest formal filing (10-K / 10-Q) with
+`filed <= trade_date` and `period_end <= filed`.
+
+| Column | Type | Description |
+|---|---|---|
+| `trade_date` | DATE | Trading date |
+| `ticker` | VARCHAR | Ticker symbol |
+| `namespace` | VARCHAR | `us-gaap` or `dei` |
+| `tag` | VARCHAR | XBRL tag name (from curated registry) |
+| `value` | DOUBLE | Value as of trade_date; NULL if no filing yet |
+| `filed_used` | DATE | Filing date of the fact producing this value |
+| `period_end_used` | DATE | Period the value describes |
+
+See ADR 0010 and ADR 0011.
