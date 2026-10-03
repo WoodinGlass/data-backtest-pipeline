@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: stg_sec_facts
+    description: >
+      Typed SEC XBRL facts, one row per
+      (ticker, namespace, tag, unit, period_end, filed, form, frame).
+      Materialized as a view. No tag filter, no PIT filter.
+    columns:
+      - name: ticker
+        data_tests: [not_null]
+      - name: cik
+        data_tests: [not_null]
+      - name: namespace
+        data_tests: [not_null]
+      - name: tag
+        data_tests: [not_null]
+      - name: unit
+        data_tests: [not_null]
+      - name: period_end
+        data_tests: [not_null]
+      - name: filed
+        data_tests: [not_null]
+      - name: form
+        data_tests: [not_null]
+      - name: value

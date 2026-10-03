@@ -53,3 +53,36 @@ sources:
               - not_null
           - name: value
             description: "Observed value; NULL when FRED returned '.'."
+      - name: sec
+        description: >
+          SEC EDGAR companyfacts, one snapshot per ticker. Written by
+          ingestion/sec/raw_store.py. Contains all XBRL tags returned
+          by SEC; curated filtering happens in intermediate. See
+          ADR 0010.
+        meta:
+          external_location: "{{ var('raw_sec_glob') }}"
+        columns:
+          - name: ticker
+            description: "Ticker symbol."
+            data_tests:
+              - not_null
+          - name: cik
+            description: "SEC Central Index Key."
+            data_tests:
+              - not_null
+          - name: namespace
+            description: "XBRL namespace (us-gaap, dei, ...)."
+            data_tests:
+              - not_null
+          - name: tag
+            description: "XBRL tag name."
+            data_tests:
+              - not_null
+          - name: filed
+            description: "Date the fact first appeared in a filing."
+            data_tests:
+              - not_null
+          - name: period_end
+            description: "Period the fact describes."
+            data_tests:
+              - not_null
