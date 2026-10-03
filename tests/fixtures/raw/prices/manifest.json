@@ -2,41 +2,41 @@
   "source": "yfinance",
   "tickers": {
     "AAPL": {
-      "latest_hash": "6205422bc327c28960ad92b3d31c030f5a7a09bbc257327d8f71b61f4efb833c",
+      "latest_hash": "48e0ad4a5d3a70d2d22302f5ec7dbaacee873ee8eee431a529722a45b96605fd",
       "snapshots": [
         {
           "first_date": "2015-01-02",
-          "hash": "6205422bc327c28960ad92b3d31c030f5a7a09bbc257327d8f71b61f4efb833c",
-          "last_date": "2024-01-31",
-          "path": "AAPL/6205422bc327c289.parquet",
-          "rows": 2285,
-          "written_at": "2026-10-02T03:41:05.468157+00:00"
+          "hash": "48e0ad4a5d3a70d2d22302f5ec7dbaacee873ee8eee431a529722a45b96605fd",
+          "last_date": "2026-10-01",
+          "path": "AAPL/48e0ad4a5d3a70d2.parquet",
+          "rows": 2954,
+          "written_at": "2026-10-02T22:30:19.325668+00:00"
         }
       ]
     },
     "MSFT": {
-      "latest_hash": "e9099c5269c474b4c3499ee2fd59fa70533c037cbcbab108a2c7a6377b7e9981",
+      "latest_hash": "578a28c4908a8d2a741d3f9c806e64d8bdf25d00c5895e40785a694b9da779dd",
       "snapshots": [
         {
           "first_date": "2015-01-02",
-          "hash": "e9099c5269c474b4c3499ee2fd59fa70533c037cbcbab108a2c7a6377b7e9981",
-          "last_date": "2024-01-31",
-          "path": "MSFT/e9099c5269c474b4.parquet",
-          "rows": 2285,
-          "written_at": "2026-10-02T03:41:05.845404+00:00"
+          "hash": "578a28c4908a8d2a741d3f9c806e64d8bdf25d00c5895e40785a694b9da779dd",
+          "last_date": "2026-10-01",
+          "path": "MSFT/578a28c4908a8d2a.parquet",
+          "rows": 2954,
+          "written_at": "2026-10-02T22:30:19.672779+00:00"
         }
       ]
     },
     "SPY": {
-      "latest_hash": "9aafaf5aa0b1fcffdd83bc65d0061c9bf14a2702debf652e3497253fc2ec5197",
+      "latest_hash": "427c859477b943c0c07876cd4e88cc9b61b6f95a029ea4e7db1d4d17c0e2fcdc",
       "snapshots": [
         {
           "first_date": "2015-01-02",
-          "hash": "9aafaf5aa0b1fcffdd83bc65d0061c9bf14a2702debf652e3497253fc2ec5197",
-          "last_date": "2024-01-31",
-          "path": "SPY/9aafaf5aa0b1fcff.parquet",
-          "rows": 2285,
-          "written_at": "2026-10-02T03:41:21.338062+00:00"
+          "hash": "427c859477b943c0c07876cd4e88cc9b61b6f95a029ea4e7db1d4d17c0e2fcdc",
+          "last_date": "2026-10-01",
+          "path": "SPY/427c859477b943c0.parquet",
+          "rows": 2954,
+          "written_at": "2026-10-02T22:30:34.970552+00:00"
         }
       ]
     }

@@ -30,6 +30,12 @@ MACRO_SERIES = ["FEDFUNDS", "DGS10", "CPIAUCSL", "PAYEMS"]
 MACRO_SRC_ROOT = Path("data/raw/macro/fred")
 MACRO_DEST_ROOT = Path("tests/fixtures/raw/macro/fred")
 
+# ── SEC fundamentals fixture ───────────────────────────────
+# Take a small subset: 3 tickers, latest snapshot each.
+SEC_TICKERS = ["AAPL", "MSFT", "SPY"]  # SPY expected to be skipped upstream
+SEC_SRC_ROOT = Path("data/raw/fundamentals/sec")
+SEC_DEST_ROOT = Path("tests/fixtures/raw/fundamentals/sec")
+
 
 def write_prices_fixture() -> int:
     """Copy a small prices subset. Returns total rows written."""
@@ -110,6 +116,45 @@ def write_macro_fixture() -> int:
     return n
 
 
+def write_sec_fixture() -> int:
+    """Copy a small SEC subset (latest snapshot per ticker, no SPY).
+
+    SPY is an ETF and has no SEC facts, so it is excluded.
+    Returns total rows written, or -1 on error.
+    """
+    if not SEC_SRC_ROOT.exists():
+        print("  WARN: data/raw/fundamentals/sec not found; skipping SEC fixture")
+        return 0
+
+    if SEC_DEST_ROOT.exists():
+        shutil.rmtree(SEC_DEST_ROOT)
+    SEC_DEST_ROOT.mkdir(parents=True, exist_ok=True)
+
+    con = duckdb.connect()
+    total = 0
+    for ticker in SEC_TICKERS:
+        if ticker == "SPY":
+            continue  # ETF, no SEC facts
+        src_dir = SEC_SRC_ROOT / ticker
+        if not src_dir.exists():
+            print(f"  SEC {ticker}: NOT FOUND (skipping)")
+            continue
+        files = sorted(src_dir.glob("*.parquet"))
+        if not files:
+            continue
+        latest = files[-1]
+        # Read the whole snapshot, keep columns; write fixture
+        df = con.sql(f"SELECT * FROM read_parquet('{latest}')").fetchdf()
+        dest_dir = SEC_DEST_ROOT / ticker
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(dest_dir / "fixture.parquet", index=False)
+        n = len(df)
+        total += n
+        print(f"  SEC {ticker}: {n} facts -> {dest_dir.name}/fixture.parquet")
+    con.close()
+    return total
+
+
 def main() -> int:
     print("Generating test fixture...")
     print()
@@ -121,9 +166,15 @@ def main() -> int:
     n_macro = write_macro_fixture()
 
     print()
+    n_sec = write_sec_fixture()
+    if n_sec < 0:
+        return 1
+
+    print()
     print(
         f"Fixture written: {n_prices} price rows across "
-        f"{len(PRICES_TICKERS)} tickers, {n_macro} macro series"
+        f"{len(PRICES_TICKERS)} tickers, {n_macro} macro series, "
+        f"{n_sec} SEC facts"
     )
     return 0
 
