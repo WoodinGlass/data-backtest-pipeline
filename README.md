@@ -597,6 +597,43 @@ prediction.
 
 ---
 
+
+---
+
+## M4.5 — Risk framework in one page
+
+Locked contract: **ADR 0013**. All parameters live in `risk/config.py` and are
+env-overridable (`DBP_RISK_*`).
+
+| Decision | Value | Rationale |
+|---|---|---|
+| Staking | **Quarter-Kelly** (`k=0.25`), cap **5% NAV** | Full Kelly over-bets on noisy `p`; quarter-Kelly tolerates ~2× estimation error |
+| Vol targeting | 10% annual, 20d lookback, `min(1, target/realized)` | Only shrinks — no leverage-up in calm regimes |
+| Direction | Long + flat (no short) | Short requires borrow model + squeeze handling (M5.5) |
+| Stop loss | -8% per position, 5d cooldown | ~2.5 ATR large-cap |
+| Drawdown | derisk 50% at -10%, halt at -20% | Soft then hard circuit breaker |
+| Idle cash | Fed Funds (`mc_fedfunds`) | More honest than 0% |
+| Costs | 2.5 bp one-way (5 bp round-trip) | Realistic for liquid large-cap |
+| Rebalance | Threshold 1% NAV | Reduces churn |
+
+### Modules
+
+- `risk/config.py` — `RiskSettings` (23 fields, 2 derived props, 1 cross-field validator)
+- `risk/staking.py` — quarter-Kelly, fixed-fractional, equal-weight, vol-target
+- `risk/entry.py` — threshold, top-N, cross-sectional (benchmark excluded)
+- `risk/limits.py` — per-position stop-loss, cooldown, DD derisk, DD halt
+
+### Test coverage
+
+| File | Tests | Focus |
+|---|---|---|
+| `test_risk_config.py` | 24 | Defaults, derived props, validator, env override |
+| `test_risk_staking.py` | 21 | All four staking rules, purity, error cases |
+| `test_risk_entry.py` | 23 | Threshold, top-N, cross-sectional, benchmark exclusion |
+| `test_risk_limits.py` | 21 | Stop-loss, DD derisk/halt (both scenarios), row-order preservation |
+| `test_risk_integration.py` | 15 | **Anti-look-ahead** (prefix stability + poison future), composition |
+| **Total** | **104** | |
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -654,9 +691,13 @@ prediction.
 
 ## Roadmap
 
+Progress: **11 / 15 milestones selesai (~73%)**. Fokus berikutnya: **M5 (walk-forward backtest)**.
+
+### ✅ Selesai
+
 - [x] **M1:** Idempotent ingestion (retry, backoff, immutable raw Parquet layer)
 - [x] **M2:** dbt staging + marts with `not_null`, `unique`, `relationships`, source freshness
-- [x] **M3:** Data quality gate (Pandera); pipeline fails on bad data
+- [x] **M3:** Data quality gate (Pandera) — pipeline fails on bad data
 - [x] **M3.5:** Macro ingestion (FRED + ALFRED, vintage-aware series)
 - [x] **M3.6:** Macro warehouse (staging, daily PIT forward-fill, marts)
 - [x] **M3.7:** Fundamental ingestion (SEC EDGAR XBRL, curated tags)
@@ -664,7 +705,10 @@ prediction.
 - [x] **M3.9:** Quality gate extension for macro + fundamental layers
 - [x] **M3.9.5:** Daily-series optimization (latest-mode expansion)
 - [x] **M4:** Point-in-time features (prices + macro + fundamental), anti-leakage tests
-- [ ] **M4.5:** ADR 0013 — risk framework (entry, staking, limits; user-defined formulas)
+- [x] **M4.5:** Risk framework — staking (quarter-Kelly), entry rules, stop-loss, drawdown halt (ADR 0013)
+
+### 🚧 Berikutnya
+
 - [ ] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration
 - [ ] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions)
 - [ ] **M7:** Prefect orchestration with failure alerts
@@ -674,8 +718,7 @@ prediction.
 - [ ] **M11:** Documentation: README, data dictionary, runbook, ADRs
 - [ ] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary
 
----
-
+## License
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

@@ -61,3 +61,10 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Archived prior code — kept locally, not committed
+risk/_archive/
+
+# Local backup files (never committed)
+
+*.bak.*
