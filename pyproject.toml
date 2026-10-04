@@ -67,7 +67,7 @@ observability = [
     "prometheus-client>=0.20",
 ]
 orchestration = [
-    "prefect>=2.19",
+    "prefect>=3.0,<4.0",
 ]
 tracking = [
     "mlflow>=2.12",

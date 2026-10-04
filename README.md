@@ -891,6 +891,105 @@ a non-repo cwd (which happens when data is in `/tmp`), the whole
 `log_backtest_run` call failed. Fix: git helpers are now strictly
 best-effort, and the CLI passes `repo_root=REPO` explicitly.
 
+
+---
+
+## M7 — Prefect orchestration in one page
+
+Locked contract: **ADR 0016**. Wraps every pipeline stage (M1-M6) as a
+Prefect flow. No pipeline logic in the orchestration layer — each flow
+is a thin subprocess call to an existing CLI.
+
+### Stage flows
+
+| Flow | Wraps | Notes |
+|---|---|---|
+| `ingest_prices` | `python -m ingestion.cli` | M1 |
+| `ingest_macro` | `python -m ingestion.macro.cli` | M3.5 |
+| `ingest_sec` | `python -m ingestion.sec.cli` | M3.7 |
+| `dbt_build` | `dbt build` | M2, M3.6, M3.8 |
+| `quality_gate` | `python -m quality.cli` | M3, M3.9 |
+| `build_features` | `python -m features.cli` | M4 |
+| `run_backtest` | `scripts/run_backtest.py` | M5 (+ M6 tracking) |
+
+### Composite flows
+
+| Flow | Sequence | Schedule (UTC) |
+|---|---|---|
+| `daily_refresh` | prices → dbt → quality → features | `0 22 * * 1-5` |
+| `weekly_refresh` | macro + sec → dbt → quality → features → backtest | `0 23 * * 0` |
+| `full_refresh` | prices + macro + sec → ... → backtest | manual |
+
+### Modes
+
+- **Ephemeral** (default): runs in-process. No Prefect server. Used by
+  Colab, CI, and `dbp-orchestrate run <flow>`.
+- **Served**: registers schedules via `flow.serve()`. Used in Docker
+  (M8) on long-lived hosts.
+
+### Retry + alerts
+
+- Every task retries **3 times** with delays `[10, 60, 300]` seconds.
+- On terminal failure: structured log + optional webhook POST (Slack
+  compatible). Webhook is best-effort — a failed alert never masks the
+  original failure.
+- Configure with `DBP_ORCH_ALERT_WEBHOOK_URL`.
+
+### Modules
+
+- `orchestration/config.py` — `OrchestrationSettings` (`DBP_ORCH_*`)
+- `orchestration/_compat.py` — Prefect-optional `@flow`/`@task`
+- `orchestration/_subprocess.py` — `run_command` wrapper with logging
+- `orchestration/alerts.py` — payload builder, webhook poster, hook
+- `orchestration/deployments.py` — schedule registry + `serve_flows`
+- `orchestration/cli.py` — `dbp-orchestrate list | run | info | schedule`
+- `orchestration/flows/` — one module per stage + composites
+
+### CLI
+
+```bash
+# Inspect
+dbp-orchestrate list
+dbp-orchestrate info daily_refresh
+dbp-orchestrate schedule
+
+# Run (ephemeral)
+dbp-orchestrate run daily_refresh
+dbp-orchestrate run run_backtest --arg mlflow=true --arg bootstrap=500
+dbp-orchestrate run weekly_refresh --dry-run
+
+# Served mode (Docker, long-lived host)
+python -c "from orchestration.deployments import serve_flows; serve_flows()"
+```
+
+### Test coverage
+
+| File | Tests |
+|---|---|
+| `test_orchestration_config.py` | 28 |
+| `test_orchestration_alerts.py` | 21 |
+| `test_orchestration_flows.py` | 23 |
+| `test_orchestration_cli.py` | 16 |
+| **Total** | **88** |
+
+### Bug caught in M7
+
+**`get_repo_root` raised when the flow ran from outside the repo.**
+The same class of bug we fixed in M6 for git helpers; here it surfaced
+when the orchestration flows were tested from a temp directory. Fixed
+by letting `_resolve_repo_root` accept an explicit `settings.repo_root`
+and otherwise walking up from `Path.cwd()`. The flow subprocess `cwd`
+is always the resolved repo root.
+
+### Design notes
+
+- **No parallelism.** All composites are linear. Branching and fan-out
+  are out of scope; they would require an ADR amendment.
+- **`track_run` merged into `run_backtest`.** ADR 0016 §4 originally
+  listed a separate `track_run` flow. In practice, tracking is a flag
+  (`--mlflow`) on `run_backtest`, so a second flow would have to share
+  a `RunResult` across process boundaries. Merged for simplicity.
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -932,7 +1031,7 @@ best-effort, and the CLI passes `repo_root=REPO` explicitly.
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0015)
+- `docs/adr/`: architecture decision records (0001–0016)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -952,7 +1051,7 @@ best-effort, and the CLI passes `repo_root=REPO` explicitly.
 
 ## Roadmap
 
-Progress: **13 / 15 milestones selesai (~87%)**. Fokus berikutnya: **M7 (Prefect orchestration)**.
+Progress: **14 / 15 milestones selesai (~93%)**. Fokus berikutnya: **M8 (Docker + make up)**.
 
 ### ✅ Selesai
 
@@ -972,7 +1071,7 @@ Progress: **13 / 15 milestones selesai (~87%)**. Fokus berikutnya: **M7 (Prefect
 
 - [x] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration (ADR 0014)
 - [x] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions) (ADR 0015)
-- [ ] **M7:** Prefect orchestration with failure alerts
+- [x] **M7:** Prefect orchestration with failure alerts (ADR 0016)
 - [ ] **M8:** Docker + `make up` for one-command reproducibility
 - [ ] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking
 - [ ] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard

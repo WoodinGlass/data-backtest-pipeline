@@ -6,46 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (M6 — MLflow tracking)
+### Added (M7 — Prefect orchestration)
 
-- **ADR 0015** — MLflow tracking + Model Registry design (8 decisions:
-  SQLite backend, single experiment, run_name = M5 run_id, prefixed
-  params, namespaced metrics, artifact reuse, refit-on-full-data +
-  @challenger/@champion, opt-in `--mlflow`).
-- `tracking/config.py` — `TrackingSettings` (`DBP_TRACK_*` env prefix,
-  URI scheme validator).
-- `tracking/client.py` — optional MLflow import guard, repo-aware SQLite
-  URI resolution, idempotent experiment setup, run context manager,
-  best-effort git info/diff + pip freeze helpers.
-- `tracking/logger.py` — params (54 fields), metrics (41 fields,
-  `pooled/*`, `deflated/*`, `agg/*`, `baseline/<name>/*`, `fold/<id>/*`),
-  and artifact upload from `data/backtest/{run_id}/`.
-- `tracking/registry.py` — `refit_full_model` (no MLflow dep),
-  `register_model` (logs to a separate registry-purpose run), and
-  `log_and_register_model` orchestrator. Alias `@challenger` moved
-  automatically; `@champion` reserved for manual promotion.
-- `tracking/cli.py` — `dbp-tracking list-runs | best-run | compare`.
-- `scripts/run_backtest.py` — new flags `--mlflow`, `--no-mlflow`,
-  `--tracking-uri`, `--no-register-model`. Default remains off; the
-  pipeline runs unchanged without MLflow installed.
-- 78 unit tests in `tests/unit/test_tracking_*.py`.
-- `[tracking]` extra in `pyproject.toml` brings in `mlflow`; the
-  `tracking*` package is now part of setuptools discovery.
-
-### Fixed (M6 discovered)
-
-- **`register_model` failed on MLflow 3.x** with
-  "Untrusted types found in the file: ['numpy.dtype']" because MLflow 3
-  changed the default sklearn serialization to `skops`. Fix: pass
-  `skops_trusted_types=["numpy.dtype"]` and switch from the deprecated
-  `artifact_path=` to `name=`.
-- **`get_git_info` raised outside a repo.** `log_backtest_run` crashed
-  when the CLI was launched from a cwd that was not a git repository
-  (e.g. running the backtest against data in `/tmp`). Git info/diff
-  helpers are now strictly best-effort, and `_run_tracking` receives
-  `repo_root=REPO` explicitly.
+- **ADR 0016** — Prefect 3 orchestration design (10 decisions:
+  ephemeral default, SQLite storage, one flow per stage, three
+  composites, cron UTC schedules, 3x retry with [10, 60, 300]s delays,
+  best-effort webhook alerts, no parallelism).
+- `orchestration/config.py` — `OrchestrationSettings` (`DBP_ORCH_*`).
+- `orchestration/_compat.py` — Prefect-optional `@flow`/`@task`
+  decorators; no-op when Prefect is missing.
+- `orchestration/_subprocess.py` — `run_command` wrapper: capture,
+  log tail, raise CalledProcessError on non-zero.
+- `orchestration/alerts.py` — failure payload builder, best-effort
+  webhook poster, Prefect on_failure hook, `Timer` helper.
+- `orchestration/deployments.py` — schedule registry + `serve_flows`
+  for served mode (blocking; Docker-targeted).
+- `orchestration/cli.py` — `dbp-orchestrate list | run | info | schedule`.
+- `orchestration/flows/`:
+  - `ingest.py` — `ingest_prices`, `ingest_macro`, `ingest_sec`
+  - `warehouse.py` — `dbt_build`
+  - `quality.py` — `quality_gate`
+  - `features.py` — `build_features`
+  - `backtest.py` — `run_backtest` (with `--mlflow` from M6)
+  - `composite.py` — `daily_refresh`, `weekly_refresh`, `full_refresh`
+- 88 unit tests in `tests/unit/test_orchestration_*.py`.
+- `pyproject.toml`: `prefect>=3.0,<4.0`; `orchestration*` package added
+  to setuptools discovery.
 
 ### Changed
 
-- `docs/adr/` count is now 0001–0015.
+- **ADR 0016 §4 simplified.** The original design listed a separate
+  `track_run` flow. Since tracking is a flag on `scripts/run_backtest.py`
+  (not a separate stage), and since sharing a `RunResult` across
+  process boundaries would have been the only reason for a second
+  flow, `track_run` was merged into `run_backtest`. See ADR 0016
+  design notes.
+- `docs/adr/` count is now 0001–0016.
 

@@ -35,3 +35,58 @@ Operational playbook for the three most common failures.
 ---
 
 _This runbook will be expanded as M7-M10 land._
+
+
+---
+
+## Orchestration (M7)
+
+Three new failure modes once flows are scheduled. All assume the
+flows are running in either ephemeral mode (via `dbp-orchestrate run`)
+or served mode (via `orchestration.deployments.serve_flows`).
+
+### 1. Flow hangs or times out
+
+**Symptom.** A flow never returns; the Prefect run shows `Running`
+past its expected duration.
+
+**Common causes and fixes:**
+
+- **Upstream API slow (yfinance, FRED, SEC).** Each task has a 3-retry
+  policy with backoff `[10, 60, 300]`. If the whole flow is stuck on
+  one task, check `orchestration/_subprocess.py` logs — the last
+  `run:` line names the command.
+- **DuckDB lock.** If a previous backtest process is still alive, the
+  new flow blocks on the warehouse file. Kill stray processes:
+  `pkill -f run_backtest.py`.
+- **`serve_flows` blocked on first flow.** In served mode, `serve_flows`
+  blocks by design (it is `flow.serve()`). It runs one flow only;
+  serve the others in separate processes.
+
+### 2. Webhook alerts not firing
+
+**Symptom.** A flow failed but no Slack message.
+
+**Check:**
+
+- `DBP_ORCH_ALERT_WEBHOOK_URL` is set (env or `.env`).
+- The URL responds to a manual `curl -X POST -H 'Content-Type:
+  application/json' -d '{"text":"ping"}' $URL`.
+- Look for `alert webhook:` in the logs at WARNING level. The poster
+  is best-effort and swallows errors so the original failure is never
+  masked — check the log to see why the POST failed.
+
+### 3. Cron never fires in served mode
+
+**Symptom.** `serve_flows` is running, but scheduled flows never start.
+
+**Check:**
+
+- Prefect server is reachable. In ephemeral mode there is no server;
+  `serve_flows` requires `PREFECT_API_URL` or a local Prefect server
+  (M8's docker compose provides one).
+- The cron string is UTC. `0 22 * * 1-5` means 22:00 UTC on weekdays,
+  not local time. Convert from your local timezone deliberately.
+- `flow.serve()` must stay alive. If the process exits, no schedule
+  fires. Run under a process manager (systemd, Docker `restart:
+  unless-stopped`).
