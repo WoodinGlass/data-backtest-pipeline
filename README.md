@@ -1,6 +1,6 @@
 # data-backtest-pipeline
 
-> A production-style data and ML pipeline: ingestion → warehouse → features → backtest → monitoring.
+> A production-style data and ML pipeline: ingestion → warehouse → features → risk → backtest → monitoring.
 
 ![CI](https://github.com/WoodinGlass/data-backtest-pipeline/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
@@ -12,25 +12,27 @@
 
 1. [What this is / is not](#what-this-is--is-not)
 2. [Problem](#problem)
-3. [Key Design Decisions](#key-design-decisions)
-4. [Architecture](#architecture)
-5. [Tech Stack](#tech-stack)
-6. [Data Contracts](#data-contracts)
-7. [Pipeline Layers](#pipeline-layers)
-8. [Idempotency and Failure Modes](#idempotency-and-failure-modes)
-9. [Universe & Data Source](#universe--data-source)
-10. [Quickstart](#quickstart)
-11. [Configuration](#configuration)
-12. [Project Structure](#project-structure)
-13. [Testing Strategy](#testing-strategy)
-14. [CI/CD](#cicd)
-15. [Observability and Monitoring](#observability-and-monitoring)
-16. [Results](#results)
-17. [Limitations](#limitations)
-18. [Documentation](#documentation)
-19. [Contributing](#contributing)
-20. [Roadmap](#roadmap)
-21. [License](#license)
+3. [Numbers at a glance](#numbers-at-a-glance)
+4. [Key Design Decisions](#key-design-decisions)
+5. [Architecture](#architecture)
+6. [Tech Stack](#tech-stack)
+7. [Data Contracts](#data-contracts)
+8. [Pipeline Layers](#pipeline-layers)
+9. [Idempotency and Failure Modes](#idempotency-and-failure-modes)
+10. [Universe & Data Source](#universe--data-source)
+11. [Quickstart](#quickstart)
+12. [Configuration](#configuration)
+13. [Project Structure](#project-structure)
+14. [Testing Strategy](#testing-strategy)
+15. [CI/CD](#cicd)
+16. [Bugs caught before production](#bugs-caught-before-production)
+17. [Observability and Monitoring](#observability-and-monitoring)
+18. [Results](#results)
+19. [Limitations](#limitations)
+20. [Documentation](#documentation)
+21. [Contributing](#contributing)
+22. [Roadmap](#roadmap)
+23. [License](#license)
 
 ---
 
@@ -38,7 +40,7 @@
 
 **This is:**
 - A portfolio project that demonstrates end-to-end data engineering and ML evaluation practices on **US equity daily data**, enriched with **macro** and **fundamental** context.
-- A reproducible pipeline: public data sources → immutable raw layer → tested dbt models → point-in-time features → walk-forward backtest → monitored dashboard.
+- A reproducible pipeline: public data sources → immutable raw layer → tested dbt models → point-in-time features → risk framework → walk-forward backtest → monitored dashboard.
 - An example of how to evaluate probabilistic models honestly (log loss, Brier score, calibration, Sharpe, max drawdown) **without data leakage, survivorship bias, or look-ahead bias**.
 - A demonstration that a small, well-built model **often fails to beat buy-and-hold** — and that reporting that honestly is the correct engineering outcome.
 
@@ -61,13 +63,54 @@ Backtests are often unreliable because of hidden data leakage, **survivorship bi
 
 ---
 
+## Numbers at a glance
+
+### Data ingested
+
+| Source | Unit | Volume | Size |
+|---|---|---|---|
+| yfinance | OHLCV rows | 94,528 | ~2 MB |
+| FRED + ALFRED | Vintage observations | 23,760,369 | ~320 MB raw |
+| SEC EDGAR | XBRL facts | 904,127 | ~5 MB |
+
+### Warehouse (DuckDB)
+
+| Table | Rows |
+|---|---|
+| `staging.stg_prices` | 94,528 |
+| `staging.stg_macro_series` | 23,758,000 |
+| `staging.stg_sec_facts` | 904,127 |
+| `intermediate.int_returns` | 94,528 |
+| `intermediate.int_macro_daily` | 394,186 |
+| `intermediate.int_fundamentals_pit` | 12,545,638 |
+| `marts.fct_returns_daily` | 94,528 |
+| `marts.fct_macro_daily` | 2,954 |
+
+### Performance wins
+
+| Operation | Before | After | Speedup |
+|---|---|---|---|
+| Macro PIT join | 1,160s | 67s | **17×** |
+| Fundamental PIT (initial → fixed) | 40 min + OOM | 70s | **∞** |
+
+### Testing
+
+| Tier | Count |
+|---|---|
+| Unit (pytest) | ~390 |
+| Integration (pytest) | 10 |
+| dbt schema + singular tests | ~99 |
+| **Total** | **~500** |
+
+---
+
 ## Key Design Decisions
 
 | Decision | Choice | Rationale |
 |---|---|---|
 | Domain | **US equities, S&P 500 subset (31 tickers + SPY), daily bars** | Clean data, standard benchmarks, honest evaluation |
 | Payload vs pipeline | **Pipeline is the product**; the model is the payload | Focus is on reliability, testing, and reproducibility |
-| Deterministic parts | Ingestion (given cached raw), dbt models, feature builders, backtest | Same input → same output; hash of input is the idempotency key |
+| Deterministic parts | Ingestion (given cached raw), dbt models, feature builders, risk rules, backtest | Same input → same output; hash of input is the idempotency key |
 | Non-deterministic parts | Model training (seeded), upstream revisions | Seeds are fixed; raw is stored immutably |
 | Storage tier | DuckDB (local warehouse) + Parquet (raw/artifacts); Snowflake optional | Small structured data, analytical queries |
 | Ingestion mode | **Batch, daily** | Simple, cheap, sufficient for daily bars |
@@ -75,6 +118,7 @@ Backtests are often unreliable because of hidden data leakage, **survivorship bi
 | Fundamental data | **SEC EDGAR XBRL, filing-date PIT** | Primary source, no look-ahead; see ADR 0010 |
 | Data quality | **Three-layer defense: ingest / gate / dbt** | Each rule lives in exactly one layer; see ADR 0008 |
 | Memory strategy | **Partition + arg_max + SQL sampling** for large models | See ADR 0011 |
+| Risk framework | **Quarter-Kelly staking, threshold entry, DD derisk/halt** | Honest measurement, no implicit leverage; see ADR 0013 |
 | Schema failures | **Hard fail** | Bad schema means corrupt data |
 | Freshness/volume issues | **Warn first**, then fail after threshold | Recoverable conditions |
 | Config | Environment variables + typed settings | No hardcoded paths or backends |
@@ -121,6 +165,10 @@ Full rationale is recorded in `docs/adr/`.
    │   + anti-leakage tests                              │
    └──────────────────────┬──────────────────────────────┘
                           ▼
+   ┌─────────────────────────────────────────────────────┐
+   │  risk/   staking · entry · limits   (ADR 0013)      │
+   └──────────────────────┬──────────────────────────────┘
+                          ▼
    ┌──────────────┐    ┌──────────┐
    │  backtest/   │───▶│  MLflow  │  params, metrics, artifacts
    └──────┬───────┘    └──────────┘
@@ -147,6 +195,7 @@ Full rationale is recorded in `docs/adr/`.
 - **Warehouse:** DuckDB (default), Snowflake (optional)
 - **Transformation:** dbt (with `dbt_utils`)
 - **Data quality:** Pandera, dbt tests
+- **Risk framework:** Pydantic Settings, pure-function registries (`risk/`)
 - **Orchestration:** Prefect
 - **Experiment tracking:** MLflow
 - **Containers:** Docker, docker-compose
@@ -187,9 +236,14 @@ idempotency that excludes `fetched_at`. See ADR 0009.
 `(ticker, namespace, tag, period_end, filed, form, frame)`, with
 `filed` as the PIT key. See ADR 0010.
 
+**Risk (`risk/config.py`):** `RiskSettings` — 23 typed fields, 2 derived
+properties (`one_way_cost_bp`, `round_trip_cost_bp`), and one cross-field
+validator enforcing that `dd_derisk_trigger` is shallower than
+`dd_halt_trigger`. Overridable via `DBP_RISK_*` env vars. See ADR 0013.
+
 Contracts live in `ingestion/schemas.py`,
-`ingestion/macro/schemas.py`, `ingestion/sec/schemas.py` and are
-documented in `docs/data_dictionary.md`.
+`ingestion/macro/schemas.py`, `ingestion/sec/schemas.py`, and
+`risk/config.py`, and are documented in `docs/data_dictionary.md`.
 
 The raw Parquet snapshots additionally carry a `ticker` / `series_id`
 column written by the store so that dbt models do not need to infer
@@ -289,24 +343,49 @@ identity from the file path. The content hash is unaffected.
   `features/config.py` creates a new directory; old versions stay.
   See ADR 0012.
 
-### 7. Backtest (`backtest/`) — planned M5
+### 7. Risk framework (`risk/`) — M4.5
+- **Contract locked in ADR 0013.** All parameters live in
+  `risk/config.py::RiskSettings` and are env-overridable
+  (`DBP_RISK_*`). No magic numbers in the backtest.
+- **`risk/staking.py`** — turn probabilities into target weights.
+  Registry of pure functions: `kelly` (quarter-Kelly, `k=0.25`,
+  cap 5% NAV), `fixed_fractional`, `equal_weight`, `vol_target`
+  (10% annual, 20d lookback, only shrinks).
+- **`risk/entry.py`** — probabilities → long/flat selection.
+  Registry: `threshold` (`p > 0.55`), `top_n` (top N by prob per
+  date), `cross_sectional` (above per-date median). Benchmark rows
+  are forced flat and excluded from ranking.
+- **`risk/limits.py`** — per-position stop-loss (`-8%`, 5d cooldown),
+  drawdown derisk (`-10%` → halve), drawdown halt (`-20%` → lock
+  flat). Single-pass chronological walk; pure function.
+- **Interaction note:** derisk and halt are not independent. Once
+  derisk halves exposure, drawdown grows more slowly, and halt
+  (`-20%`) may never trigger. This is by design — derisk is the
+  soft circuit breaker, halt is the hard one. Set
+  `dd_derisk_factor=1.0` to make halt reachable.
+- **104 unit tests** in `tests/unit/test_risk_*.py`, including
+  anti-look-ahead checks (prefix stability + poison-future probes).
+
+### 8. Backtest (`backtest/`) — planned M5
 - Walk-forward evaluation with expanding or rolling windows.
 - Baselines: 50/50 naive, momentum, buy-and-hold SPY.
 - Main model: calibrated classifier.
 - Metrics: log loss, Brier, calibration, hit rate, Sharpe, max
   drawdown, ROI vs SPY.
+- Consumes `risk/` as a locked contract — no refactor of staking,
+  entry, or limits when the model changes.
 
-### 8. Models (`models/`) — planned M5–M6
+### 9. Models (`models/`) — planned M5–M6
 - Train, calibrate, and register models. Every run tracked in MLflow.
 
-### 9. Orchestration (`orchestration/`) — planned M7
+### 10. Orchestration (`orchestration/`) — planned M7
 - Prefect flows on a daily schedule after US market close.
 
-### 10. Monitoring (`monitoring/`) — planned M10
+### 11. Monitoring (`monitoring/`) — planned M10
 - Data freshness, feature drift, prediction drift, rolling model
   performance vs buy-and-hold.
 
-### 11. Dashboard (`app/`) — planned M10
+### 12. Dashboard (`app/`) — planned M10
 - Streamlit: pipeline health, backtest results, calibration, equity
   curve vs SPY, drift.
 
@@ -324,6 +403,7 @@ final state.
 | Insert raw fundamental | `(ticker, cik, hash)` | Content-addressed |
 | Refetch after revision | New hash | New immutable row |
 | Feature build | `(feature_version, ticker, date)` | Overwrite the same partition |
+| Risk rules | Pure functions, no state persisted | Same input → same output |
 | Model run | Run ID | Tracked in MLflow |
 
 **Failure modes:**
@@ -341,6 +421,7 @@ final state.
 | Warehouse | Pipeline stops | Retry, fail loudly, alert |
 | Bad data | Wrong returns | DQ gate fails the run |
 | Large query OOM | Pipeline killed | Partition + arg_max + SQL sampling (ADR 0011) |
+| Derisk active during crash | Halt unreachable | By design; set `dd_derisk_factor=1.0` to disable scaling |
 | Network | Intermittent errors | Retry with jitter |
 
 **Deliberate non-strategy:** we do **not** silently forward-fill
@@ -386,15 +467,20 @@ often than daily).
 
 ## Quickstart
 
-**Requirements:** Python 3.11, Docker, Make.
+**Requirements:** Python 3.11, Make. Docker is optional and only
+relevant once M8 lands (currently scaffolded, not functional).
 
 ```bash
 git clone https://github.com/WoodinGlass/data-backtest-pipeline.git
 cd data-backtest-pipeline
 
 cp .env.example .env
-make up
+make setup-dev
 ```
+
+> **Note:** the `make up` target (Docker-based, one-command
+> reproducibility) is planned for M8 and is scaffolded but not yet
+> functional. Use `make setup-dev` for local development.
 
 Useful commands:
 
@@ -409,17 +495,16 @@ make ingest-macro   # fetch macro series (M3.5)
 make ingest-sec     # fetch fundamental filings (M3.7)
 make dbt-build      # run dbt models and tests
 make quality        # run the data quality gate (8 layers)
+make features       # build the feature table (M4)
 make ci             # run the full CI suite locally
 make setup-dev      # one-command resumable environment setup
-make features       # build the feature table (M4)
-make backtest       # run the walk-forward backtest
-make app            # start the Streamlit dashboard
-make down           # stop services
+make backtest       # run the walk-forward backtest (M5)
+make app            # start the Streamlit dashboard (M10)
 ```
 
 **Colab users:** run `scripts/setup_dev.py` (or `make setup-dev`).
 It is idempotent and resumable: state is checkpointed to
-`data/.setup_state.json`, so a restart during the ~2 hour macro
+`data/.setup_state.json`, so a restart during the ~15 minute macro
 ingest does not force a full re-run.
 
 ---
@@ -448,6 +533,16 @@ MACRO_HISTORY_START=2015-01-01
 SEC_USER_AGENT="data-backtest-pipeline you@example.com"
 FUNDAMENTAL_TAGS_FILE=./config/fundamental_tags.yml
 FUNDAMENTAL_HISTORY_START=2015-01-01
+
+# Risk framework (M4.5) — all optional; defaults in ADR 0013
+DBP_RISK_STAKING_METHOD=kelly
+DBP_RISK_KELLY_FRACTION=0.25
+DBP_RISK_KELLY_CAP=0.05
+DBP_RISK_ENTRY_METHOD=threshold
+DBP_RISK_ENTRY_PROB_THRESHOLD=0.55
+DBP_RISK_STOP_LOSS_PCT=-0.08
+DBP_RISK_DD_DERISK_TRIGGER=-0.10
+DBP_RISK_DD_HALT_TRIGGER=-0.20
 
 # MLflow
 MLFLOW_TRACKING_URI=./mlruns
@@ -484,11 +579,18 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 │   ├── tests/              # singular tests (PIT, OHLC, benchmark)
 │   └── macros/             # generate_schema_name, freshness
 ├── features/           # PIT feature builders (M4) + versioned Parquet
-├── backtest/           # walk-forward, metrics, staking
-├── models/             # train, calibrate, registry
-├── orchestration/      # Prefect flows
-├── monitoring/         # drift, freshness, model performance
-├── app/                # Streamlit dashboard
+├── risk/               # Risk framework (M4.5, ADR 0013)
+│   ├── config.py       #   RiskSettings — single source of parameters
+│   ├── staking.py      #   quarter-Kelly, fixed-fractional, equal-weight,
+│   │                   #   vol-target (registry)
+│   ├── entry.py        #   threshold, top-N, cross-sectional (registry)
+│   ├── limits.py       #   stop-loss, cooldown, DD derisk, DD halt
+│   └── _archive/       #   prior-design files, git-ignored, local only
+├── backtest/           # walk-forward, metrics (M5)
+├── models/             # train, calibrate, registry (M5–M6)
+├── orchestration/      # Prefect flows (M7)
+├── monitoring/         # drift, freshness, model performance (M10)
+├── app/                # Streamlit dashboard (M10)
 ├── config/             # universe.txt, macro_series*.yml,
 │                       # fundamental_tags.yml, sec_skip_tickers.yml
 ├── scripts/            # setup_dev.py, checkpoint.py, fixtures,
@@ -497,7 +599,7 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 │   ├── unit/           # pure, no external services
 │   ├── integration/    # needs network or a warehouse
 │   └── fixtures/       # committed tiny Parquet fixture for CI
-├── docs/               # ADR 0001-0011, data dictionary, runbook
+├── docs/               # ADR 0001–0013, data dictionary, runbook
 ├── .github/workflows/  # CI: lint-and-test + dbt-build + quality
 ├── Dockerfile  docker-compose.yml  Makefile
 └── pyproject.toml  .pre-commit-config.yaml
@@ -509,15 +611,23 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 
 | Tier | Count | Scope | Marker |
 |---|---|---|---|
-| Unit (pytest) | ~290 | Pure functions, no external services (default) | none |
+| Unit (pytest) | ~390 | Pure functions, no external services (default) | none |
 | Integration (pytest) | 10 | Needs network or a warehouse | `@pytest.mark.integration` |
 | dbt tests (schema + singular) | ~99 | Column-level + SQL checks | — |
 | Slow | — | Long-running backtests | `@pytest.mark.slow` |
+
+Breakdown of the ~390 unit tests:
+
+| Area | Count | Notes |
+|---|---|---|
+| Risk framework | 104 | `tests/unit/test_risk_*.py` |
+| Ingestion, quality, features, misc | ~286 | everything else |
 
 Key tests:
 - **Anti-leakage (prices):** features for date `t` never change when future rows are shuffled.
 - **Anti-leakage (macro):** no value in `int_macro_daily` originates from a vintage later than the trade date.
 - **Anti-leakage (fundamental):** no fact originates from a filing whose `filed > trade_date`.
+- **Anti-look-ahead (risk):** prefix stability + poison-future probes across the full `entry → staking → limits` pipeline.
 - **Survivorship:** universe membership is date-aware; delisted tickers remain.
 - **Idempotency:** running ingestion twice does not duplicate rows.
 - **dbt tests:** `not_null`, `unique`, `relationships`, source freshness.
@@ -555,6 +665,28 @@ no yfinance, no FRED, no SEC EDGAR, identical results on every run.
 
 Merges are blocked if either job fails. Commits follow
 [Conventional Commits](https://www.conventionalcommits.org/).
+
+---
+
+## Bugs caught before production
+
+Nine critical bugs were caught **before** they reached the model.
+This is the real value of the three-layer defense, the immutable
+audit trail, and the anti-look-ahead tests.
+
+| Bug | Root cause | Fix | Universal lesson |
+|---|---|---|---|
+| Unstable raw hash | `adj_close` noise from vendor | Exclude `adj_close` from content hash (ADR 0006) | Vendor-derived data ≠ primary data |
+| Vintage not cumulative | FRED omits unchanged observations | Reconstruct via `realtime_start` / `realtime_end` interval | Vendor API ≠ your mental model |
+| `ASOF JOIN` non-deterministic | Unsorted input to DuckDB ASOF | `ROW_NUMBER + QUALIFY` → `GROUP BY arg_max` | DuckDB ASOF requires sorted input |
+| OOM on `int_fundamentals_pit` | Window function cannot spill in DuckDB | Partition-by-year UNION + `memory_limit=6GB` + `temp_directory` (ADR 0011) | Window > 5M rows: partition is mandatory |
+| XBRL tag unstable across eras | ASC 606 changed revenue tags ~2018 | Coalesce multiple tags; use `NetIncomeLoss` for era checks | Regulation can change vendor schema |
+| SPY 404 | ETFs do not file `companyfacts` | `config/sec_skip_tickers.yml` | Not every ticker is a company |
+| CI fixture glob not overridden | Anchor-based patch was fragile | Regex force-replace at runtime | Anchor-based patches are brittle |
+| Risk limits output out of order | Restore key used index **labels**, not positions | Use positional counter `range(len)` | Non-default index exposes latent bugs (caught by `test_row_order_matches_input`) |
+| Risk validator too strict | Rejected `stop_loss_pct` deeper than `dd_halt_trigger` | Only enforce `dd_derisk < dd_halt` (the real invariant) | Not every numeric ordering is a hard invariant |
+
+Full changelog in `CHANGELOG.md`. ADRs in `docs/adr/`.
 
 ---
 
@@ -597,43 +729,6 @@ prediction.
 
 ---
 
-
----
-
-## M4.5 — Risk framework in one page
-
-Locked contract: **ADR 0013**. All parameters live in `risk/config.py` and are
-env-overridable (`DBP_RISK_*`).
-
-| Decision | Value | Rationale |
-|---|---|---|
-| Staking | **Quarter-Kelly** (`k=0.25`), cap **5% NAV** | Full Kelly over-bets on noisy `p`; quarter-Kelly tolerates ~2× estimation error |
-| Vol targeting | 10% annual, 20d lookback, `min(1, target/realized)` | Only shrinks — no leverage-up in calm regimes |
-| Direction | Long + flat (no short) | Short requires borrow model + squeeze handling (M5.5) |
-| Stop loss | -8% per position, 5d cooldown | ~2.5 ATR large-cap |
-| Drawdown | derisk 50% at -10%, halt at -20% | Soft then hard circuit breaker |
-| Idle cash | Fed Funds (`mc_fedfunds`) | More honest than 0% |
-| Costs | 2.5 bp one-way (5 bp round-trip) | Realistic for liquid large-cap |
-| Rebalance | Threshold 1% NAV | Reduces churn |
-
-### Modules
-
-- `risk/config.py` — `RiskSettings` (23 fields, 2 derived props, 1 cross-field validator)
-- `risk/staking.py` — quarter-Kelly, fixed-fractional, equal-weight, vol-target
-- `risk/entry.py` — threshold, top-N, cross-sectional (benchmark excluded)
-- `risk/limits.py` — per-position stop-loss, cooldown, DD derisk, DD halt
-
-### Test coverage
-
-| File | Tests | Focus |
-|---|---|---|
-| `test_risk_config.py` | 24 | Defaults, derived props, validator, env override |
-| `test_risk_staking.py` | 21 | All four staking rules, purity, error cases |
-| `test_risk_entry.py` | 23 | Threshold, top-N, cross-sectional, benchmark exclusion |
-| `test_risk_limits.py` | 21 | Stop-loss, DD derisk/halt (both scenarios), row-order preservation |
-| `test_risk_integration.py` | 15 | **Anti-look-ahead** (prefix stability + poison future), composition |
-| **Total** | **104** | |
-
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -660,6 +755,10 @@ env-overridable (`DBP_RISK_*`).
 - **XOM history is limited** — its ticker currently resolves to a
   2024 reorganization entity with facts only from mid-2026. Union of
   pre- and post-reorg CIKs is future work.
+- **Risk framework is v1.** Derisk and halt are not independent:
+  once derisk halves exposure, halt may never trigger. This is by
+  design; set `dd_derisk_factor=1.0` to disable derisk scaling.
+  Long-short, leverage, and options are out of scope.
 - Reported ROI ignores real-world frictions (spread, slippage,
   borrow, taxes) unless modeled.
 - Daily equity direction is close to a martingale; not beating
@@ -671,7 +770,7 @@ env-overridable (`DBP_RISK_*`).
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0011)
+- `docs/adr/`: architecture decision records (0001–0013)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -718,7 +817,8 @@ Progress: **11 / 15 milestones selesai (~73%)**. Fokus berikutnya: **M5 (walk-fo
 - [ ] **M11:** Documentation: README, data dictionary, runbook, ADRs
 - [ ] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary
 
-## License
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
