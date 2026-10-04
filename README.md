@@ -804,6 +804,93 @@ ADR 0013 §4. This was latent from M4.5 (test fixture had SPY at
 by the M5 integration test. Fixed by reusing `_eligible_mask`;
 regression test added to `tests/unit/test_risk_entry.py`.
 
+
+---
+
+## M6 — MLflow tracking in one page
+
+Locked contract: **ADR 0015**. Opt-in via `--mlflow`. Off by default;
+the pipeline runs unchanged without MLflow installed.
+
+### What gets logged
+
+For every `--mlflow` run, the walk-forward run is logged to the
+`daily-direction` experiment with:
+
+- **Params** (~54): `bt.*` (BacktestSettings), `risk.*` (RiskSettings),
+  `git.sha` / `git.branch` / `git.dirty`, `env.python` / `env.platform`.
+- **Metrics** (~41): `pooled/*` (sharpe, auc, log_loss, brier, hit_rate,
+  cagr, max_drawdown, turnover, sharpe_ci_*), `deflated/*`
+  (sharpe_annualized, deflated_sharpe, n_trials), `agg/*` (median + IQR),
+  `baseline/<name>/*` (each baseline's pooled AUC + Sharpe), and
+  `fold/<id>/*` (per-fold Sharpe + AUC, capped).
+- **Artifacts**: entire `data/backtest/{run_id}/` directory under
+  `backtest/`. Plus `meta/*.diff` (uncommitted git diff, truncated) and
+  `meta/*.txt` (pip freeze snapshot).
+
+### Model Registry
+
+After the walk-forward run, `tracking.registry` refits one model on
+**all features** with the same `BacktestSettings` and registers it under
+`daily-direction-model`. Versions auto-increment. Aliases:
+
+- `@challenger` — always points to the newest version.
+- `@champion` — never moved automatically; manual promotion only.
+
+The registry run is a **separate** MLflow run tagged `purpose=registry`,
+so the walk-forward run stays clean.
+
+### Modules
+
+- `tracking/config.py` — `TrackingSettings` (`DBP_TRACK_*` env prefix)
+- `tracking/client.py` — optional MLflow import, path resolution,
+  experiment setup, run context manager, git/env helpers
+- `tracking/logger.py` — params + metrics + artifacts logging
+- `tracking/registry.py` — refit on full data, register, alias mgmt
+- `tracking/cli.py` — `dbp-tracking list-runs | best-run | compare`
+
+### Test coverage
+
+| File | Tests |
+|---|---|
+| `test_tracking_config.py` | 27 |
+| `test_tracking_client.py` | 23 |
+| `test_tracking_logger.py` | 15 |
+| `test_tracking_registry.py` | 13 |
+| **Total** | **78** |
+
+### CLI usage
+
+```bash
+# Run with tracking enabled
+python scripts/run_backtest.py --mlflow
+
+# Custom tracking URI (SQLite)
+python scripts/run_backtest.py --mlflow --tracking-uri sqlite:////tmp/mlflow.db
+
+# Inspect runs
+dbp-tracking list-runs --limit 10 --order-by sharpe
+dbp-tracking best-run --metric sharpe
+dbp-tracking compare <run_id_a> <run_id_b>
+
+# Or launch the UI
+mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
+```
+
+### Bug caught in M6
+
+**`register_model` failed on MLflow 3.x** — MLflow 3 changed the default
+serialization format to `skops`, which rejects `numpy.dtype` unless
+whitelisted. Fix: pass `skops_trusted_types=["numpy.dtype"]` and switch
+from deprecated `artifact_path=` to `name=`. Caught by the M6
+end-to-end smoke test against a live local MLflow.
+
+**`get_git_info` raised when cwd was not a repo.** Original code called
+`get_repo_root()` without a `try/except`; if the CLI was launched from
+a non-repo cwd (which happens when data is in `/tmp`), the whole
+`log_backtest_run` call failed. Fix: git helpers are now strictly
+best-effort, and the CLI passes `repo_root=REPO` explicitly.
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -845,7 +932,7 @@ regression test added to `tests/unit/test_risk_entry.py`.
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0014)
+- `docs/adr/`: architecture decision records (0001–0015)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -865,7 +952,7 @@ regression test added to `tests/unit/test_risk_entry.py`.
 
 ## Roadmap
 
-Progress: **12 / 15 milestones selesai (~80%)**. Fokus berikutnya: **M6 (MLflow tracking)**.
+Progress: **13 / 15 milestones selesai (~87%)**. Fokus berikutnya: **M7 (Prefect orchestration)**.
 
 ### ✅ Selesai
 
@@ -884,7 +971,7 @@ Progress: **12 / 15 milestones selesai (~80%)**. Fokus berikutnya: **M6 (MLflow 
 ### 🚧 Berikutnya
 
 - [x] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration (ADR 0014)
-- [ ] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions)
+- [x] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions) (ADR 0015)
 - [ ] **M7:** Prefect orchestration with failure alerts
 - [ ] **M8:** Docker + `make up` for one-command reproducibility
 - [ ] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking

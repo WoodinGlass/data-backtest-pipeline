@@ -107,6 +107,32 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
+    # --- MLflow tracking (M6) ---
+    p.add_argument(
+        "--mlflow",
+        dest="mlflow",
+        action="store_true",
+        help="Enable MLflow tracking (default: off).",
+    )
+    p.add_argument(
+        "--no-mlflow",
+        dest="mlflow",
+        action="store_false",
+        help="Explicitly disable MLflow tracking.",
+    )
+    p.set_defaults(mlflow=False)
+    p.add_argument(
+        "--tracking-uri",
+        default=None,
+        help="Override MLflow tracking URI.",
+    )
+    p.add_argument(
+        "--no-register-model",
+        dest="register_model",
+        action="store_false",
+        help="Skip refit-on-full-data + registry step.",
+    )
+    p.set_defaults(register_model=True)
     return p.parse_args(argv)
 
 
@@ -265,6 +291,87 @@ def _print_summary_table(run_dir: Path) -> None:
         pass
 
 
+def _run_tracking(
+    result,
+    features,
+    bt_settings,
+    tracking_uri,
+    register_model,
+    run_dir,
+    logger,
+    repo_root=None,
+) -> None:
+    """Best-effort MLflow logging + optional model registration."""
+    try:
+        from backtest.report import summarize
+        from tracking.client import MLFLOW_AVAILABLE
+        from tracking.config import TrackingSettings
+        from tracking.logger import log_backtest_run
+        from tracking.registry import log_and_register_model
+    except ImportError as e:
+        logger.warning("tracking: import failed (%s); skipping", e)
+        return
+
+    if not MLFLOW_AVAILABLE:
+        logger.warning(
+            "tracking: mlflow not installed; skipping. Install with `pip install -e .[tracking]`."
+        )
+        return
+
+    kwargs = {"enabled": True, "register_model": register_model}
+    if tracking_uri:
+        kwargs["tracking_uri"] = tracking_uri
+    settings = TrackingSettings(**kwargs)
+    logger.info("tracking: %s", settings.describe())
+
+    try:
+        summary = summarize(
+            result,
+            n_trials_main=4,
+            bootstrap_resamples=1000,
+            bootstrap_ci=0.95,
+            seed=bt_settings.seed,
+        )
+    except Exception as e:
+        logger.warning("tracking: summarize failed (%s); skipping", e)
+        return
+
+    try:
+        run_id = log_backtest_run(
+            result=result,
+            summary=summary,
+            run_dir=run_dir,
+            settings=settings,
+            repo_root=repo_root,
+        )
+        if run_id:
+            logger.info("tracking: logged walk-forward run id=%s", run_id)
+        else:
+            logger.warning("tracking: log_backtest_run returned None")
+    except Exception as e:
+        logger.error("tracking: log_backtest_run failed: %s", e)
+
+    if register_model:
+        try:
+            version = log_and_register_model(
+                result=result,
+                features=features,
+                bt_settings=bt_settings,
+                tracking_settings=settings,
+            )
+            if version:
+                logger.info(
+                    "tracking: registered %s v%s as @%s",
+                    settings.model_name,
+                    version,
+                    settings.challenger_alias,
+                )
+            else:
+                logger.warning("tracking: log_and_register_model returned None")
+        except Exception as e:
+            logger.error("tracking: log_and_register_model failed: %s", e)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
 
@@ -347,6 +454,19 @@ def main(argv: list[str] | None = None) -> int:
         make_plots=not args.no_plots,
     )
     logger.info("report built")
+
+    # --- MLflow tracking (M6, opt-in) ---
+    if args.mlflow:
+        _run_tracking(
+            result=result,
+            features=features,
+            bt_settings=bs,
+            tracking_uri=args.tracking_uri,
+            register_model=args.register_model,
+            run_dir=run_dir,
+            logger=logger,
+            repo_root=REPO,
+        )
 
     _print_summary_table(run_dir)
     print()

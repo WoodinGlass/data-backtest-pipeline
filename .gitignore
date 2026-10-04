@@ -68,3 +68,6 @@ risk/_archive/
 # Local backup files (never committed)
 
 *.bak.*
+
+# MLflow tracking data
+*.db

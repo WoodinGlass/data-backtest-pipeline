@@ -6,43 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (M5 — Walk-forward backtest)
+### Added (M6 — MLflow tracking)
 
-- **ADR 0014** — walk-forward methodology (rolling 36m/3m/3m, purge +
-  embargo, logistic v1, time-decay weights, per-fold + pooled +
-  yearly reporting).
-- `backtest/config.py` — `BacktestSettings` (27 fields, 3 cross-field
-  validators, `DBP_BT_*` env prefix).
-- `backtest/split.py` — fold generator with purge (1 row) + embargo
-  (5 days), test windows non-overlapping.
-- `backtest/metrics.py` — classification (log loss, Brier, AUC, hit
-  rate, calibration), trading (Sharpe, CAGR, MDD, turnover,
-  cost-adjusted), advanced (bootstrap CI, deflated Sharpe).
-- `backtest/baselines.py` — B0 naive, B1 momentum 20d, B2 SPY
-  buy-and-hold, B3 always-long top-10 (registry pattern).
-- `backtest/model.py` — logistic regression with time-decay sample
-  weights (half-life 252d), median imputation, single-class fallback.
-- `backtest/portfolio.py` — `risk/` integration, rebalance band
-  (1% NAV), Fed Funds idle cash, cost model.
-- `backtest/runner.py` — per-fold orchestration, reproducibility
-  (global seed), persisted artifacts (predictions, returns, metrics).
-- `backtest/report.py` — aggregate per fold + pooled + yearly,
-  bootstrap CI, deflated Sharpe, calibration + equity curve plots.
-- `scripts/run_backtest.py` — CLI end-to-end (features + warehouse
-  + cash rates).
-- ~130 unit tests in `tests/unit/test_backtest_*.py`.
+- **ADR 0015** — MLflow tracking + Model Registry design (8 decisions:
+  SQLite backend, single experiment, run_name = M5 run_id, prefixed
+  params, namespaced metrics, artifact reuse, refit-on-full-data +
+  @challenger/@champion, opt-in `--mlflow`).
+- `tracking/config.py` — `TrackingSettings` (`DBP_TRACK_*` env prefix,
+  URI scheme validator).
+- `tracking/client.py` — optional MLflow import guard, repo-aware SQLite
+  URI resolution, idempotent experiment setup, run context manager,
+  best-effort git info/diff + pip freeze helpers.
+- `tracking/logger.py` — params (54 fields), metrics (41 fields,
+  `pooled/*`, `deflated/*`, `agg/*`, `baseline/<name>/*`, `fold/<id>/*`),
+  and artifact upload from `data/backtest/{run_id}/`.
+- `tracking/registry.py` — `refit_full_model` (no MLflow dep),
+  `register_model` (logs to a separate registry-purpose run), and
+  `log_and_register_model` orchestrator. Alias `@challenger` moved
+  automatically; `@champion` reserved for manual promotion.
+- `tracking/cli.py` — `dbp-tracking list-runs | best-run | compare`.
+- `scripts/run_backtest.py` — new flags `--mlflow`, `--no-mlflow`,
+  `--tracking-uri`, `--no-register-model`. Default remains off; the
+  pipeline runs unchanged without MLflow installed.
+- 78 unit tests in `tests/unit/test_tracking_*.py`.
+- `[tracking]` extra in `pyproject.toml` brings in `mlflow`; the
+  `tracking*` package is now part of setuptools discovery.
 
-### Fixed (M5 discovered)
+### Fixed (M6 discovered)
 
-- **`risk/entry.py::_select_threshold` did not exclude benchmark
-  rows.** Unlike `top_n` and `cross_sectional`, the threshold rule
-  only compared `prob > threshold`; SPY could be selected if its
-  prob exceeded the threshold, violating ADR 0013 §4. Latent from
-  M4.5 (M4.5 fixture had SPY.prob=0.50 < threshold=0.55 by
-  coincidence). Found by the M5 integration test. Fixed by reusing
-  `_eligible_mask`; regression test added.
+- **`register_model` failed on MLflow 3.x** with
+  "Untrusted types found in the file: ['numpy.dtype']" because MLflow 3
+  changed the default sklearn serialization to `skops`. Fix: pass
+  `skops_trusted_types=["numpy.dtype"]` and switch from the deprecated
+  `artifact_path=` to `name=`.
+- **`get_git_info` raised outside a repo.** `log_backtest_run` crashed
+  when the CLI was launched from a cwd that was not a git repository
+  (e.g. running the backtest against data in `/tmp`). Git info/diff
+  helpers are now strictly best-effort, and `_run_tracking` receives
+  `repo_root=REPO` explicitly.
 
 ### Changed
 
-- `docs/adr/` count is now 0001–0014.
+- `docs/adr/` count is now 0001–0015.
 

@@ -96,7 +96,7 @@ dbp-quality = "quality.cli:main"
 where = ["."]
 include = [
     "ingestion*", "features*", "backtest*", "models*",
-    "orchestration*", "monitoring*", "app*", "quality*",
+    "orchestration*", "monitoring*", "app*", "quality*", "tracking*",
 ]
 
 # ── ruff ────────────────────────────────────────────────────
