@@ -6,14 +6,23 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel superseded runs on the same ref.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Default: only read repo contents. Jobs can request more if needed.
+permissions:
+  contents: read
+
 jobs:
-  # ── Python: lint, type-check, unit tests ─────────────────
+  # ===================================================================
+  # 1. Lint + type-check + unit tests + coverage floor
+  # ===================================================================
   lint-and-test:
+    name: lint-and-test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -28,8 +37,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        # `quality` extras bring in pandera, which mypy needs to
-        # type-check quality/schemas.py and quality/gate.py.
+        # Extras: dev (pytest/ruff/mypy), quality (pandera),
+        # backtest (scipy + scikit-learn for M5 tests). MLflow and
+        # Prefect are intentionally NOT installed: their test suites
+        # pass with the optional-import guards in tracking/_compat
+        # and tracking/client.
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,quality,backtest]"
@@ -43,12 +55,31 @@ jobs:
       - name: Type-check (mypy)
         run: mypy ingestion quality
 
-      - name: Unit tests
-        run: pytest -m "not integration and not slow" --cov --cov-report=term-missing
+      - name: Unit tests + coverage
+        # Coverage floor 70% is the ADR 0018 contract. Observed
+        # baseline is 78%; the buffer absorbs Colab vs CI differences
+        # (MLflow / Prefect extras absent in CI).
+        run: |
+          pytest -m "not integration and not slow" \
+            --cov --cov-report=term-missing \
+            --cov-fail-under=70
 
-  # ── Warehouse + quality gate: dbt + Pandera on fixture ───
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: .coverage
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ===================================================================
+  # 2. Warehouse: dbt build against committed fixtures
+  # ===================================================================
   dbt-build:
+    name: dbt-build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -72,25 +103,15 @@ jobs:
       - name: Prepare warehouse directory
         run: mkdir -p data
 
-      - name: dbt build (against committed fixture)
-        # Override raw_prices_glob AND raw_macro_glob so dbt reads the
-        # small committed fixtures under tests/fixtures/ instead of the
-        # gitignored local raw layers. Keeps CI hermetic: no yfinance,
-        # no FRED, no network, deterministic.
+      - name: "dbt build (against committed fixture)"
+        # Override raw_*_glob so dbt reads committed fixtures under
+        # tests/fixtures/. CI stays hermetic: no yfinance, no FRED,
+        # no SEC EDGAR, deterministic.
         run: |
           dbt build --project-dir dbt --profiles-dir dbt \
             --vars '{"raw_prices_glob": "tests/fixtures/raw/prices/yfinance/*/*.parquet", "raw_macro_glob": "tests/fixtures/raw/macro/fred/*/*.parquet", "raw_sec_glob": "tests/fixtures/raw/fundamentals/sec/*/*.parquet"}'
 
-      - name: Quality gate (raw + staging + marts)
-        # The gate reads the raw layer from where ingestion would have
-        # written it. In CI there is no real ingest; we point at the
-        # committed fixture instead. The warehouse was built in the
-        # previous step, so staging and marts are available there.
-        #
-        # We skip the `sec` layer in CI for now: SEC fundamentals are
-        # ingested locally but no SEC fixture is committed yet. The
-        # layer will be enabled in CI in M3.8 alongside the fundamental
-        # warehouse and its fixture.
+      - name: "Quality gate (raw + staging + marts)"
         env:
           RAW_DATA_DIR: tests/fixtures/raw
         run: |
@@ -107,3 +128,41 @@ jobs:
           path: reports/quality.json
           if-no-files-found: ignore
           retention-days: 7
+
+  # ===================================================================
+  # 3. Docker image: build + smoke import inside the container
+  # ===================================================================
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: dbp-pipeline:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: "Smoke — import core packages inside the image"
+        run: |
+          docker run --rm dbp-pipeline:ci \
+            python -c "import ingestion, backtest, tracking, orchestration; print('imports ok')"
+
+      - name: "Smoke — orchestration CLI inside the image"
+        run: |
+          docker run --rm dbp-pipeline:ci \
+            python -m orchestration.cli list
+
+      - name: "Smoke — entrypoint is executable and non-root"
+        run: |
+          docker run --rm --entrypoint /bin/sh dbp-pipeline:ci -c "id -u; test -x /usr/local/bin/docker_entrypoint.sh && echo entrypoint-ok"

@@ -1068,6 +1068,83 @@ State lives **on the host**, not in the container:
   End-to-end `make up` is verified on a local machine; see
   `docs/runbook.md` for the acceptance test.
 
+
+---
+
+## M9 — CI contract in one page
+
+Locked contract: **ADR 0018**. Every merge to `main` was green on
+all required checks. The contract lives in
+`.github/workflows/ci.yml` and `docs/adr/0018-ci-contract.md`.
+
+### Three parallel jobs
+
+| Job | Runs | Timeout | Blocking |
+|---|---|---|---|
+| `lint-and-test` | ruff + mypy + pytest + coverage floor | 15 min | **yes** |
+| `dbt-build` | dbt build (fixture) + quality gate | 15 min | **yes** |
+| `docker-build` | image build + 3 smokes (import, CLI, non-root entry) | 20 min | **yes** |
+
+Wall-clock target: **≤ 6 minutes** on GitHub-hosted runners when
+cache is warm.
+
+### Coverage floor
+
+`pytest --cov --cov-fail-under=70`. Baseline is 78% on a full local
+environment; the 8-point buffer absorbs CI differences (MLflow and
+Prefect are not installed in CI, so their test suites skip
+gracefully via the optional-import guards).
+
+Raising the floor is a **deliberate** action: any bump must be
+recorded as an amendment to ADR 0018 in the same PR.
+
+### Required status checks (branch protection)
+
+GitHub repository settings — not files — enforce merge blocking.
+Exact clicks are in `docs/runbook.md`. The contract:
+
+- `main` is protected. Direct push disabled.
+- Every change (including the maintainer's) goes through a PR.
+- All three CI jobs are **required status checks**.
+- Stale reviews dismissed on new commits.
+- Conversations must be resolved before merge.
+
+### Dependabot
+
+Weekly PRs for `pip` and `github-actions`. Grouped per ecosystem
+(`runtime` vs `dev`). Auto-merge is **not** enabled — every bump is
+a deliberate decision. Major bumps of `mlflow`, `prefect`, and
+`pandera` are ignored by config; those are bumped by hand.
+
+### Local mirror
+
+`make ci` runs the same steps as the GitHub `lint-and-test` +
+`dbt-build` jobs. `make ci-docker` runs the `docker-build` job.
+`make ci-full` runs everything.
+
+```bash
+make ci         # lint + type + test + coverage + dbt + quality
+make ci-docker  # docker build + smoke imports (requires Docker)
+make ci-full    # both
+```
+
+### PR template
+
+Four prompts in `.github/pull_request_template.md`: what changed,
+which milestone, how it was tested, ADR amendment required. Enough
+to force clarity, not so many that the prompts get deleted.
+
+### Notes
+
+- CI is **hermetic**: no network, no secrets, deterministic.
+  `dbt build` runs against committed fixtures under
+  `tests/fixtures/raw/`.
+- CI does **not** run integration tests (`-m integration`) or
+  deploy. Those are out of scope for M9.
+- The `docker-build` job builds the image but does **not** start
+  the compose stack. Building the image is the contract; running
+  the pipeline in Docker is a user action.
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -1109,7 +1186,7 @@ State lives **on the host**, not in the container:
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0017)
+- `docs/adr/`: architecture decision records (0001–0018)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -1129,7 +1206,7 @@ State lives **on the host**, not in the container:
 
 ## Roadmap
 
-Progress: **15 / 15 milestones core selesai** (M9-M12 polish + deployment berikutnya). Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
+Progress: **16 / 19 milestones selesai (~84%)**. Fokus berikutnya: **M10 (Monitoring + Streamlit)**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
 
 ### ✅ Selesai
 
@@ -1151,7 +1228,7 @@ Progress: **15 / 15 milestones core selesai** (M9-M12 polish + deployment beriku
 - [x] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions) (ADR 0015)
 - [x] **M7:** Prefect orchestration with failure alerts (ADR 0016)
 - [x] **M8:** Docker + `make up` for one-command reproducibility (ADR 0017)
-- [ ] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking
+- [x] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking (ADR 0018)
 - [ ] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard
 - [ ] **M11:** Documentation: README, data dictionary, runbook, ADRs
 - [ ] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary

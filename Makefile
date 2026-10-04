@@ -1,4 +1,4 @@
-.PHONY: help install install-all lint format test test-int test-all dbt-build ingest ingest-macro ingest-sec quality quality-json features features-info backtest app orchestrate clean ci up down logs shell run pipeline docker-build prefect-up prefect-down
+.PHONY: help install install-all lint format test test-int test-all dbt-build ingest ingest-macro ingest-sec quality quality-json features features-info backtest app orchestrate clean ci ci-docker ci-full up down logs shell run pipeline docker-build prefect-up prefect-down
 
 
 help:  ## Show this help
@@ -31,13 +31,22 @@ quality:  ## Run the data quality gate (raw + staging + marts)
 quality-json:  ## Run the gate and write a JSON report to ./reports/quality.json
 	python -m quality.cli --json reports/quality.json
 
-ci:  ## Run the full CI suite locally (lint + test + dbt + quality)
+ci:  ## Mirror the GitHub CI suite locally (lint + type + test + coverage + dbt + quality)
 	ruff check .
 	ruff format --check .
 	mypy ingestion quality
-	pytest -m "not integration and not slow"
+	pytest -m "not integration and not slow" \
+		--cov --cov-report=term-missing --cov-fail-under=70
 	$(MAKE) dbt-build FIXTURE=1
 	RAW_DATA_DIR=tests/fixtures/raw python -m quality.cli --tickers-from-raw
+
+ci-docker:  ## Mirror the GitHub docker-build job locally (requires Docker)
+	docker build -t dbp-pipeline:ci .
+	docker run --rm dbp-pipeline:ci python -c "import ingestion, backtest, tracking, orchestration; print('imports ok')"
+	docker run --rm dbp-pipeline:ci python -m orchestration.cli list
+
+ci-full: ci ci-docker  ## Run every CI job locally, including docker-build
+
 
 test-all:  ## Run all tests with coverage
 	pytest --cov --cov-report=term-missing

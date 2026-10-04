@@ -106,6 +106,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `shell`, `run`, `pipeline`, `prefect-up`, `prefect-down`,
   `orchestrate`.
 
+### Added (M9 — CI contract)
+
+- **ADR 0018** — CI contract (9 decisions: three parallel jobs
+  with timeouts, coverage floor 70%, fixture-only dbt in CI,
+  docker-build job with smokes, branch protection documented in
+  runbook, Dependabot for pip + Actions, minimal PR template,
+  maintenance policy).
+- `.github/workflows/ci.yml` — rewritten:
+  - `lint-and-test`: adds `--cov-fail-under=70` and uploads the
+    `.coverage` file as an artifact.
+  - `dbt-build`: unchanged semantics, named job, 15 min timeout.
+  - `docker-build` (new): builds the image with Buildx + GHA cache,
+    runs three smokes (imports, orchestration CLI, non-root
+    entrypoint). 20 min timeout.
+  - Top-level `permissions: contents: read`.
+- `.github/dependabot.yml` — weekly pip + github-actions PRs,
+  grouped by ecosystem, ignoring major bumps of mlflow / prefect /
+  pandera.
+- `.github/pull_request_template.md` — 4-prompt checklist.
+- `Makefile`: `ci` now includes the coverage floor; new targets
+  `ci-docker` and `ci-full`.
+- `pyproject.toml`: coverage `source` extended to include
+  `tracking`, `orchestration`, and `quality`.
+
+### Notes (M9)
+
+- Branch protection (required status checks, dismiss stale reviews,
+  require resolved conversations) is configured in GitHub
+  repository settings. The exact steps are in
+  `docs/runbook.md` under "CI / branch protection".
+- Integration tests (`pytest -m integration`) stay local-only until
+  M10's monitoring clarifies what they should cover in CI.
+
 ### Notes
 
 - **Colab cannot run Docker.** M8 verification is static:

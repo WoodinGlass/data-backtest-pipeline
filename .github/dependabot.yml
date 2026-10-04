@@ -1,0 +1,94 @@
+# ---------------------------------------------------------------
+# Dependabot — weekly dependency PRs.
+# See docs/adr/0018-ci-contract.md section 7.
+#
+# Policy:
+#   - Weekly schedule (Monday 09:00 UTC).
+#   - Grouped per ecosystem to avoid PR noise.
+#   - No auto-merge. Every PR runs full CI and merges manually.
+#   - Ignore major-version bumps of the two heavy frameworks
+#     (mlflow, prefect) so we bump them deliberately, not on a
+#     Monday morning.
+# ---------------------------------------------------------------
+
+version: 2
+
+updates:
+  # --- Python dependencies (pyproject.toml + extras) ---
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
+    # Group everything into two buckets: runtime and dev.
+    # Extra-specific bumps still land in one of these two.
+    groups:
+      runtime:
+        applies-to: version-updates
+        patterns:
+          - "pydantic*"
+          - "python-dotenv"
+          - "structlog"
+          - "httpx"
+          - "tenacity"
+          - "pandas"
+          - "numpy"
+          - "pyarrow"
+          - "duckdb"
+          - "yfinance"
+          - "pyyaml"
+          - "scipy"
+          - "scikit-learn"
+          - "pandera"
+      dev:
+        applies-to: version-updates
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "pre-commit"
+          - "types-*"
+          - "dbt-*"
+          - "mlflow"
+          - "prefect"
+    ignore:
+      # Bump these by hand when we have a reason.
+      - dependency-name: "mlflow"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "prefect"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pandera"
+        update-types: ["version-update:semver-major"]
+      # Python 3.11 floor is a deliberate constraint; do not
+      # chase 3.12+ in this project.
+      - dependency-name: "python"
+
+  # --- GitHub Actions ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"
+      include: "scope"
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns:
+          - "*"

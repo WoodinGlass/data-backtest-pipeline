@@ -206,3 +206,56 @@ docker compose logs --tail=50 worker
 
 **Fix.** `make up` again. If the entrypoint crashed, the logs will
 name the failing check (`import ingestion` or a missing mount).
+
+
+---
+
+## CI / branch protection
+
+### One-time setup (GitHub UI)
+
+1. Repo → **Settings → Branches → Add branch protection rule**.
+2. Branch name pattern: `main`.
+3. Enable:
+   - **Require a pull request before merging.**
+     - Require approvals: `1`.
+     - Dismiss stale pull request approvals when new commits are
+       pushed.
+     - Require conversation resolution before merging.
+   - **Require status checks to pass before merging.**
+     - Require branches to be up to date before merging.
+     - Status checks (add all three, exact names):
+       - `lint-and-test`
+       - `dbt-build`
+       - `docker-build`
+   - **Require linear history.** (Prevents merge commits; PRs must
+     squash or rebase.)
+   - **Do not allow bypassing the above settings.**
+     - (Includes the maintainer. If you need to hotfix, temporarily
+       disable this checkbox — the audit trail in GitHub shows who
+       did.)
+4. Save.
+
+### Verifying the contract after a settings change
+
+Open any PR; the "Merge" button must be greyed out until all three
+checks are green. If the button is active while a check is red,
+branch protection was misconfigured — recheck step 3.
+
+### CI failure triage
+
+| Job | Likely cause | Fix |
+|---|---|---|
+| `lint-and-test` (ruff) | Style drift | `make format` then re-push |
+| `lint-and-test` (mypy) | New type error | Fix or narrow with a local `# type: ignore[code]` (never blanket) |
+| `lint-and-test` (pytest) | Real test failure | Reproduce locally: `pytest tests/unit/test_x.py::TestY::test_z` |
+| `lint-and-test` (coverage) | New uncovered code | Add tests, or (rare) amend ADR 0018 §3 with a lower floor in the same PR |
+| `dbt-build` | dbt model or test regression | `make dbt-build FIXTURE=1` locally, read the failing model |
+| `docker-build` | Dockerfile regression | `make ci-docker` locally, read the failing step |
+
+### What CI does NOT check
+
+- Integration tests (`pytest -m integration`) — stay local.
+- `make up` end-to-end — user action, acceptance test in the
+  Docker section above.
+- Deployment — out of scope until M12.

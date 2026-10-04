@@ -158,5 +158,14 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["ingestion", "features", "backtest", "models", "monitoring"]
+source = [
+    "ingestion",
+    "features",
+    "backtest",
+    "tracking",
+    "orchestration",
+    "quality",
+    "models",
+    "monitoring",
+]
 branch = true
