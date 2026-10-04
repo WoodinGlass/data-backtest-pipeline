@@ -76,6 +76,10 @@ tracking = [
 quality = [
     "pandera>=0.19",
 ]
+backtest = [
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+]
 app = [
     "streamlit>=1.33",
     "plotly>=5.20",

@@ -5,10 +5,10 @@ help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 install:  ## Install package with dev extras
-	pip install -e ".[dev,dbt,quality,tracking,orchestration,app]"
+	pip install -e ".[dev,dbt,quality,backtest,tracking,orchestration,app]"
 
 install-all:  ## Install package with all extras (recommended for Colab/dev)
-	pip install -e ".[dev,dbt,quality,tracking,orchestration,app,integration,observability,snowflake]"
+	pip install -e ".[dev,dbt,quality,backtest,tracking,orchestration,app,integration,observability,snowflake]"
 
 lint:  ## Run ruff and mypy
 	ruff check .
@@ -68,7 +68,7 @@ features-info:  ## Print feature file info
 	python -m features.cli --info
 
 backtest:  ## Run the walk-forward backtest
-	python -m backtest.run
+	python scripts/run_backtest.py
 
 app:  ## Start the Streamlit dashboard
 	streamlit run app/streamlit_app.py
