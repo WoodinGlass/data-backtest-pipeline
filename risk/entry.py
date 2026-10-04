@@ -55,18 +55,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-import numpy as np
 import pandas as pd
 
 from risk.config import RiskSettings
-
 
 # ---------------------------------------------------------------------
 # Pure entry-rule functions
 # ---------------------------------------------------------------------
 
+
 def _select_threshold(
-    predictions: pd.DataFrame, settings: RiskSettings,
+    predictions: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.DataFrame:
     """Long when prob > threshold; flat otherwise. ADR 0013 §4.
 
@@ -80,7 +80,8 @@ def _select_threshold(
 
 
 def _select_top_n(
-    predictions: pd.DataFrame, settings: RiskSettings,
+    predictions: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.DataFrame:
     """Top-N names by prob per trade_date go long. ADR 0013 §8.
 
@@ -93,10 +94,7 @@ def _select_top_n(
 
     # Rank by prob descending, ties broken by ticker asc.
     df = predictions.loc[eligible, ["trade_date", "ticker", "prob"]].copy()
-    df["_rank"] = (
-        df.groupby("trade_date")["prob"]
-        .rank(method="first", ascending=False)
-    )
+    df["_rank"] = df.groupby("trade_date")["prob"].rank(method="first", ascending=False)
     selected_idx = df.index[df["_rank"] <= n]
 
     is_long = pd.Series(False, index=predictions.index)
@@ -105,7 +103,8 @@ def _select_top_n(
 
 
 def _select_cross_sectional(
-    predictions: pd.DataFrame, settings: RiskSettings,
+    predictions: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.DataFrame:
     """Long if prob is above the cross-sectional median per date.
 
@@ -116,11 +115,7 @@ def _select_cross_sectional(
     eligible = _eligible_mask(predictions)
 
     # Per-date median over eligible rows
-    med = (
-        predictions.loc[eligible]
-        .groupby("trade_date")["prob"]
-        .transform("median")
-    )
+    med = predictions.loc[eligible].groupby("trade_date")["prob"].transform("median")
 
     p = predictions["prob"].astype(float)
     is_long = pd.Series(False, index=predictions.index)
@@ -134,6 +129,7 @@ def _select_cross_sectional(
 # Helpers (pure)
 # ---------------------------------------------------------------------
 
+
 def _eligible_mask(predictions: pd.DataFrame) -> pd.Series:
     """True for rows that can be traded (non-benchmark, prob not NaN)."""
     if "is_benchmark" in predictions.columns:
@@ -145,7 +141,8 @@ def _eligible_mask(predictions: pd.DataFrame) -> pd.Series:
 
 
 def _apply_side(
-    predictions: pd.DataFrame, is_long: pd.Series,
+    predictions: pd.DataFrame,
+    is_long: pd.Series,
     settings: RiskSettings,
 ) -> pd.DataFrame:
     """Build the output DataFrame with ``side`` and ``selected``.
@@ -171,9 +168,7 @@ def _apply_side(
 # Registry (ADR 0013 §8)
 # ---------------------------------------------------------------------
 
-_ENTRY_REGISTRY: dict[
-    str, Callable[[pd.DataFrame, RiskSettings], pd.DataFrame]
-] = {
+_ENTRY_REGISTRY: dict[str, Callable[[pd.DataFrame, RiskSettings], pd.DataFrame]] = {
     "threshold": _select_threshold,
     "top_n": _select_top_n,
     "cross_sectional": _select_cross_sectional,
@@ -187,6 +182,7 @@ def register_entry(
     Callable[[pd.DataFrame, RiskSettings], pd.DataFrame],
 ]:
     """Decorator: register a new entry rule under ``name``."""
+
     def _decorator(
         fn: Callable[[pd.DataFrame, RiskSettings], pd.DataFrame],
     ) -> Callable[[pd.DataFrame, RiskSettings], pd.DataFrame]:
@@ -194,6 +190,7 @@ def register_entry(
             raise ValueError(f"Entry rule '{name}' is already registered.")
         _ENTRY_REGISTRY[name] = fn
         return fn
+
     return _decorator
 
 
@@ -210,7 +207,8 @@ _REQUIRED_PREDICTION_COLUMNS = ("ticker", "trade_date", "prob")
 
 
 def apply_entry_rules(
-    predictions: pd.DataFrame, settings: RiskSettings | None = None,
+    predictions: pd.DataFrame,
+    settings: RiskSettings | None = None,
 ) -> pd.DataFrame:
     """Apply the entry rule selected by ``settings.entry_method``.
 
@@ -243,14 +241,10 @@ def apply_entry_rules(
     method = settings.entry_method
     if method not in _ENTRY_REGISTRY:
         raise ValueError(
-            f"Unknown entry method: {method!r}. "
-            f"Available: {available_entry_methods()}."
+            f"Unknown entry method: {method!r}. Available: {available_entry_methods()}."
         )
 
-    missing = [
-        c for c in _REQUIRED_PREDICTION_COLUMNS
-        if c not in predictions.columns
-    ]
+    missing = [c for c in _REQUIRED_PREDICTION_COLUMNS if c not in predictions.columns]
     if missing:
         raise ValueError(
             f"predictions is missing required columns: {missing}. "

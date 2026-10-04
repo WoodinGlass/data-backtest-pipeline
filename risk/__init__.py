@@ -8,4 +8,4 @@ Contract and rationale: docs/adr/0013-risk-framework.md
 
 from risk.config import RISK_FRAMEWORK_VERSION, RiskSettings
 
-__all__ = ["RiskSettings", "RISK_FRAMEWORK_VERSION"]
+__all__ = ["RISK_FRAMEWORK_VERSION", "RiskSettings"]

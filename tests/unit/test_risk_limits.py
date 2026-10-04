@@ -2,53 +2,61 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import pytest
 
 from risk.config import RiskSettings
 from risk.limits import apply_all_limits, cap_position_limits
 
-
 # ---------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------
 
+
 def _stop_loss_fixture():
     """Single ticker, price drops -10% on day 3 -> stop-out."""
     dates = pd.date_range("2024-01-02", periods=6, freq="B").date
-    prices = pd.DataFrame({
-        "ticker": ["AAA"] * 6,
-        "trade_date": list(dates),
-        "close": [100.0, 95.0, 90.0, 92.0, 95.0, 100.0],
-    })
-    weights = pd.DataFrame({
-        "ticker": ["AAA"] * 6,
-        "trade_date": list(dates),
-        "weight": [0.03] * 6,
-    })
+    prices = pd.DataFrame(
+        {
+            "ticker": ["AAA"] * 6,
+            "trade_date": list(dates),
+            "close": [100.0, 95.0, 90.0, 92.0, 95.0, 100.0],
+        }
+    )
+    weights = pd.DataFrame(
+        {
+            "ticker": ["AAA"] * 6,
+            "trade_date": list(dates),
+            "weight": [0.03] * 6,
+        }
+    )
     return weights, prices
 
 
 def _dd_fixture():
     """Single ticker, weight=1.0, price drops -20% over 5 days."""
     dates = pd.date_range("2024-01-02", periods=30, freq="B").date
-    prices = pd.DataFrame({
-        "ticker": ["AAA"] * 30,
-        "trade_date": list(dates),
-        "close": [100.0] * 10 + [95.0, 90.0, 85.0, 82.0, 80.0] + [80.0] * 15,
-    })
-    weights = pd.DataFrame({
-        "ticker": ["AAA"] * 30,
-        "trade_date": list(dates),
-        "weight": [1.0] * 30,
-    })
+    prices = pd.DataFrame(
+        {
+            "ticker": ["AAA"] * 30,
+            "trade_date": list(dates),
+            "close": [100.0] * 10 + [95.0, 90.0, 85.0, 82.0, 80.0] + [80.0] * 15,
+        }
+    )
+    weights = pd.DataFrame(
+        {
+            "ticker": ["AAA"] * 30,
+            "trade_date": list(dates),
+            "weight": [1.0] * 30,
+        }
+    )
     return weights, prices
 
 
 # ---------------------------------------------------------------------
 # Stop loss
 # ---------------------------------------------------------------------
+
 
 class TestStopLoss:
     def test_triggers_at_threshold(self) -> None:
@@ -84,11 +92,14 @@ class TestStopLoss:
 # Drawdown derisk / halt
 # ---------------------------------------------------------------------
 
+
 class TestDrawdownDerisk:
     def test_derisk_fires_and_prevents_halt(self) -> None:
         w, p = _dd_fixture()
         rs = RiskSettings(
-            kelly_cap=1.0, stop_loss_pct=-0.99, dd_derisk_factor=0.5,
+            kelly_cap=1.0,
+            stop_loss_pct=-0.99,
+            dd_derisk_factor=0.5,
         )
         out = apply_all_limits(w, p, rs)
         derisk = out[out["dd_state"] == "derisk"]
@@ -100,7 +111,9 @@ class TestDrawdownDerisk:
     def test_derisk_first_fires_at_minus_10pct(self) -> None:
         w, p = _dd_fixture()
         rs = RiskSettings(
-            kelly_cap=1.0, stop_loss_pct=-0.99, dd_derisk_factor=0.5,
+            kelly_cap=1.0,
+            stop_loss_pct=-0.99,
+            dd_derisk_factor=0.5,
         )
         out = apply_all_limits(w, p, rs)
         first = out[out["dd_state"] == "derisk"]["trade_date"].min()
@@ -112,7 +125,9 @@ class TestDrawdownHalt:
     def test_halt_fires_when_derisk_disabled(self) -> None:
         w, p = _dd_fixture()
         rs = RiskSettings(
-            kelly_cap=1.0, stop_loss_pct=-0.99, dd_derisk_factor=1.0,
+            kelly_cap=1.0,
+            stop_loss_pct=-0.99,
+            dd_derisk_factor=1.0,
         )
         out = apply_all_limits(w, p, rs)
         halt = out[out["dd_state"] == "halt"]
@@ -124,7 +139,9 @@ class TestDrawdownHalt:
     def test_post_halt_all_weights_zero(self) -> None:
         w, p = _dd_fixture()
         rs = RiskSettings(
-            kelly_cap=1.0, stop_loss_pct=-0.99, dd_derisk_factor=1.0,
+            kelly_cap=1.0,
+            stop_loss_pct=-0.99,
+            dd_derisk_factor=1.0,
         )
         out = apply_all_limits(w, p, rs)
         halt_start = out[out["dd_state"] == "halt"]["trade_date"].min()
@@ -136,24 +153,29 @@ class TestDrawdownHalt:
 # cap_position_limits
 # ---------------------------------------------------------------------
 
+
 class TestCapPositionLimits:
     def test_clips_above_cap(self) -> None:
-        w = pd.DataFrame({
-            "ticker": ["A", "B", "C"],
-            "trade_date": [pd.to_datetime("2024-01-02").date()] * 3,
-            "weight": [0.01, 0.10, 0.03],
-        })
+        w = pd.DataFrame(
+            {
+                "ticker": ["A", "B", "C"],
+                "trade_date": [pd.to_datetime("2024-01-02").date()] * 3,
+                "weight": [0.01, 0.10, 0.03],
+            }
+        )
         capped = cap_position_limits(w, RiskSettings())
         assert capped.loc[1, "weight"] == 0.05
         assert capped.loc[0, "weight"] == 0.01
         assert capped.loc[2, "weight"] == 0.03
 
     def test_clips_negative_when_long_only(self) -> None:
-        w = pd.DataFrame({
-            "ticker": ["A"],
-            "trade_date": [pd.to_datetime("2024-01-02").date()],
-            "weight": [-0.05],
-        })
+        w = pd.DataFrame(
+            {
+                "ticker": ["A"],
+                "trade_date": [pd.to_datetime("2024-01-02").date()],
+                "weight": [-0.05],
+            }
+        )
         capped = cap_position_limits(w, RiskSettings())
         assert capped.loc[0, "weight"] == 0.0
 
@@ -161,6 +183,7 @@ class TestCapPositionLimits:
 # ---------------------------------------------------------------------
 # Purity & schema
 # ---------------------------------------------------------------------
+
 
 class TestPurityAndSchema:
     def test_input_not_mutated(self) -> None:
@@ -175,9 +198,12 @@ class TestPurityAndSchema:
         w, p = _stop_loss_fixture()
         out = apply_all_limits(w, p, RiskSettings())
         assert set(out.columns) == {
-            "ticker", "trade_date",
-            "weight_before_limits", "weight",
-            "stop_out", "dd_state",
+            "ticker",
+            "trade_date",
+            "weight_before_limits",
+            "weight",
+            "stop_out",
+            "dd_state",
         }
 
     def test_row_order_matches_input(self) -> None:
@@ -214,6 +240,7 @@ class TestPurityAndSchema:
 # ---------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------
+
 
 class TestErrors:
     def test_missing_weight_column(self) -> None:

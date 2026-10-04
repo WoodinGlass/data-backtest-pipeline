@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from risk.config import RISK_FRAMEWORK_VERSION, RiskSettings
 
@@ -71,12 +72,12 @@ class TestDerivedProperties:
 
 class TestCrossFieldValidation:
     def test_rejects_derisk_deeper_than_halt(self) -> None:
-        with pytest.raises(Exception) as exc:
+        with pytest.raises(ValidationError) as exc:
             RiskSettings(dd_derisk_trigger=-0.25, dd_halt_trigger=-0.20)
         assert "shallower" in str(exc.value)
 
     def test_rejects_derisk_equal_to_halt(self) -> None:
-        with pytest.raises(Exception) as exc:
+        with pytest.raises(ValidationError) as exc:
             RiskSettings(dd_derisk_trigger=-0.20, dd_halt_trigger=-0.20)
         assert "shallower" in str(exc.value)
 
@@ -89,19 +90,19 @@ class TestCrossFieldValidation:
         assert RiskSettings(kelly_cap=1.0).kelly_cap == 1.0
 
     def test_rejects_kelly_fraction_above_one(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             RiskSettings(kelly_fraction=1.5)
 
     def test_rejects_negative_kelly_cap(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             RiskSettings(kelly_cap=-0.05)
 
     def test_rejects_positive_stop_loss(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             RiskSettings(stop_loss_pct=0.05)
 
     def test_rejects_zero_vol_target(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             RiskSettings(target_vol_annual=0.0)
 
 

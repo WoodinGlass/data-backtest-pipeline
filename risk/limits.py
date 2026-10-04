@@ -62,13 +62,14 @@ import pandas as pd
 
 from risk.config import RiskSettings
 
-
 # ---------------------------------------------------------------------
 # Standalone: cap per-name positions (stateless)
 # ---------------------------------------------------------------------
 
+
 def cap_position_limits(
-    weights: pd.DataFrame, settings: RiskSettings | None = None,
+    weights: pd.DataFrame,
+    settings: RiskSettings | None = None,
 ) -> pd.DataFrame:
     """Enforce ``settings.kelly_cap`` and non-negativity per row.
 
@@ -90,8 +91,10 @@ def cap_position_limits(
 # Internal helpers (pure)
 # ---------------------------------------------------------------------
 
+
 def _validate_inputs(
-    target_weights: pd.DataFrame, prices: pd.DataFrame,
+    target_weights: pd.DataFrame,
+    prices: pd.DataFrame,
 ) -> None:
     req_w = {"ticker", "trade_date", "weight"}
     req_p = {"ticker", "trade_date", "close"}
@@ -99,14 +102,10 @@ def _validate_inputs(
     miss_p = req_p - set(prices.columns)
     if miss_w:
         raise ValueError(
-            f"target_weights missing columns: {sorted(miss_w)}. "
-            f"Required: {sorted(req_w)}."
+            f"target_weights missing columns: {sorted(miss_w)}. Required: {sorted(req_w)}."
         )
     if miss_p:
-        raise ValueError(
-            f"prices missing columns: {sorted(miss_p)}. "
-            f"Required: {sorted(req_p)}."
-        )
+        raise ValueError(f"prices missing columns: {sorted(miss_p)}. Required: {sorted(req_p)}.")
     if (prices["close"] <= 0).any():
         raise ValueError("prices['close'] must be positive.")
 
@@ -127,6 +126,7 @@ def _wide_to_long(df: pd.DataFrame, value_name: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------
+
 
 def apply_all_limits(
     target_weights: pd.DataFrame,
@@ -153,13 +153,14 @@ def apply_all_limits(
 
     # Build wide matrices
     px = prices.pivot(
-        index="trade_date", columns="ticker", values="close",
+        index="trade_date",
+        columns="ticker",
+        values="close",
     ).sort_index()
     tickers = list(px.columns)
 
     w_raw = (
-        target_weights
-        .pivot(index="trade_date", columns="ticker", values="weight")
+        target_weights.pivot(index="trade_date", columns="ticker", values="weight")
         .reindex(columns=tickers)
         .sort_index()
         .fillna(0.0)
@@ -168,9 +169,7 @@ def apply_all_limits(
     # Align dates: only dates present in BOTH weights and prices
     dates = w_raw.index.intersection(px.index).sort_values()
     if len(dates) == 0:
-        raise ValueError(
-            "No overlapping trade_date between target_weights and prices."
-        )
+        raise ValueError("No overlapping trade_date between target_weights and prices.")
     w_raw = w_raw.loc[dates]
     px = px.loc[dates]
 
@@ -199,7 +198,7 @@ def apply_all_limits(
             if not np.isfinite(port_ret):
                 port_ret = 0.0
 
-        nav *= (1.0 + port_ret)
+        nav *= 1.0 + port_ret
         peak = max(peak, nav)
         dd = (nav / peak) - 1.0 if peak > 0 else 0.0
 
@@ -258,7 +257,8 @@ def apply_all_limits(
                 stop_out.iloc[i, stop_out.columns.get_loc(t)] = True
                 del entry_price[t]
                 cd_end_idx = min(
-                    i + settings.stop_loss_cooldown_days, len(dates) - 1,
+                    i + settings.stop_loss_cooldown_days,
+                    len(dates) - 1,
                 )
                 cooldown_until[t] = dates[cd_end_idx]
 
@@ -269,15 +269,10 @@ def apply_all_limits(
     wb_long = _wide_to_long(w_raw, "weight_before_limits")
     so_long = _wide_to_long(stop_out, "stop_out")
 
-    dd_long = (
-        dd_state.rename("dd_state")
-        .reset_index()
-        .rename(columns={"index": "trade_date"})
-    )
+    dd_long = dd_state.rename("dd_state").reset_index().rename(columns={"index": "trade_date"})
 
     long = (
-        w_long
-        .merge(wb_long, on=["trade_date", "ticker"], how="left")
+        w_long.merge(wb_long, on=["trade_date", "ticker"], how="left")
         .merge(so_long, on=["trade_date", "ticker"], how="left")
         .merge(dd_long, on="trade_date", how="left")
     )
@@ -291,11 +286,16 @@ def apply_all_limits(
     out = restore.merge(long, on=["ticker", "trade_date"], how="left")
     out = out.set_index("_pos").sort_index()
 
-    out = out[[
-        "ticker", "trade_date",
-        "weight_before_limits", "weight",
-        "stop_out", "dd_state",
-    ]]
+    out = out[
+        [
+            "ticker",
+            "trade_date",
+            "weight_before_limits",
+            "weight",
+            "stop_out",
+            "dd_state",
+        ]
+    ]
 
     # Dtype hygiene
     out["stop_out"] = out["stop_out"].fillna(False).astype(bool)
@@ -306,7 +306,8 @@ def apply_all_limits(
         out["weight"] = out["weight"].clip(lower=0.0, upper=settings.kelly_cap)
     else:
         out["weight"] = out["weight"].clip(
-            lower=-settings.kelly_cap, upper=settings.kelly_cap,
+            lower=-settings.kelly_cap,
+            upper=settings.kelly_cap,
         )
 
     return out

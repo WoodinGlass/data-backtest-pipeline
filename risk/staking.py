@@ -47,27 +47,28 @@ import pandas as pd
 
 from risk.config import RiskSettings
 
-
 # ---------------------------------------------------------------------
 # Pure staking functions
 # ---------------------------------------------------------------------
 
+
 def _size_kelly(
-    signals: pd.DataFrame, settings: RiskSettings,
+    signals: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.Series:
     """Quarter-Kelly: f = k * (2p - 1), clipped to [0, cap].
 
     ADR 0013 §1. Uses even-odds binary approximation; long-only v1.
     """
     p = signals["prob"].astype(float)
-    f_star = 2.0 * p - 1.0                      # raw Kelly fraction
-    f = settings.kelly_fraction * f_star        # fractional Kelly
-    f = f.clip(lower=0.0, upper=settings.kelly_cap)
-    return f
+    f_star = 2.0 * p - 1.0  # raw Kelly fraction
+    f = settings.kelly_fraction * f_star  # fractional Kelly
+    return f.clip(lower=0.0, upper=settings.kelly_cap)
 
 
 def _size_fixed_fractional(
-    signals: pd.DataFrame, settings: RiskSettings,
+    signals: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.Series:
     """Constant size per name, capped. ADR 0013 §1 (alternatives)."""
     size = min(settings.fixed_fractional, settings.kelly_cap)
@@ -75,7 +76,8 @@ def _size_fixed_fractional(
 
 
 def _size_equal_weight(
-    signals: pd.DataFrame, settings: RiskSettings,
+    signals: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.Series:
     """1/N per trade_date, capped at kelly_cap. ADR 0013 §1 (alternatives).
 
@@ -89,7 +91,8 @@ def _size_equal_weight(
 
 
 def _size_vol_target(
-    signals: pd.DataFrame, settings: RiskSettings,
+    signals: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.Series:
     """Position size = min(1, target_vol / realized_vol), scaled by cap.
 
@@ -128,6 +131,7 @@ def register_staking(
     Callable[[pd.DataFrame, RiskSettings], pd.Series],
 ]:
     """Decorator: register a new staking rule under ``name``."""
+
     def _decorator(
         fn: Callable[[pd.DataFrame, RiskSettings], pd.Series],
     ) -> Callable[[pd.DataFrame, RiskSettings], pd.Series]:
@@ -135,6 +139,7 @@ def register_staking(
             raise ValueError(f"Staking rule '{name}' is already registered.")
         _STAKING_REGISTRY[name] = fn
         return fn
+
     return _decorator
 
 
@@ -151,7 +156,8 @@ _REQUIRED_SIGNAL_COLUMNS = ("ticker", "trade_date", "prob")
 
 
 def compute_weights(
-    signals: pd.DataFrame, settings: RiskSettings | None = None,
+    signals: pd.DataFrame,
+    settings: RiskSettings | None = None,
 ) -> pd.Series:
     """Apply the staking rule selected by ``settings.staking_method``.
 
@@ -185,8 +191,7 @@ def compute_weights(
     method = settings.staking_method
     if method not in _STAKING_REGISTRY:
         raise ValueError(
-            f"Unknown staking method: {method!r}. "
-            f"Available: {available_staking_methods()}."
+            f"Unknown staking method: {method!r}. Available: {available_staking_methods()}."
         )
 
     missing = [c for c in _REQUIRED_SIGNAL_COLUMNS if c not in signals.columns]
@@ -197,9 +202,7 @@ def compute_weights(
         )
 
     if method == "vol_target" and "realized_vol" not in signals.columns:
-        raise ValueError(
-            "Staking method 'vol_target' requires column 'realized_vol'."
-        )
+        raise ValueError("Staking method 'vol_target' requires column 'realized_vol'.")
 
     if signals.empty:
         return pd.Series([], index=signals.index, dtype=float)
@@ -213,7 +216,7 @@ def compute_weights(
 
 
 __all__ = [
-    "compute_weights",
     "available_staking_methods",
+    "compute_weights",
     "register_staking",
 ]

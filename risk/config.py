@@ -15,7 +15,6 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 RISK_FRAMEWORK_VERSION: str = "v1"
 
 
@@ -41,9 +40,7 @@ class RiskSettings(BaseSettings):
     )
 
     # --- 1. Staking (ADR 0013 §1) ---
-    staking_method: Literal[
-        "kelly", "fixed_fractional", "equal_weight", "vol_target"
-    ] = Field(
+    staking_method: Literal["kelly", "fixed_fractional", "equal_weight", "vol_target"] = Field(
         default="kelly",
         description="Staking rule selector. See risk/staking.py registry.",
     )
@@ -200,7 +197,7 @@ class RiskSettings(BaseSettings):
     # per-position stop and let the DD halt be the only circuit breaker.
     #
     @model_validator(mode="after")
-    def _check_dd_ordering(self) -> "RiskSettings":
+    def _check_dd_ordering(self) -> RiskSettings:
         if self.dd_derisk_trigger <= self.dd_halt_trigger:
             raise ValueError(
                 f"dd_derisk_trigger ({self.dd_derisk_trigger}) must be "

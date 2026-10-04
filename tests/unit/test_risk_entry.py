@@ -25,25 +25,31 @@ def _preds() -> pd.DataFrame:
     }
     for d, probs in data.items():
         for ticker, p in probs.items():
-            rows.append({
-                "ticker": ticker,
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "trade_date": pd.to_datetime(d).date(),
+                    "prob": p,
+                    "is_benchmark": False,
+                }
+            )
+        rows.append(
+            {
+                "ticker": "SPY",
                 "trade_date": pd.to_datetime(d).date(),
-                "prob": p,
-                "is_benchmark": False,
-            })
-        rows.append({
-            "ticker": "SPY",
-            "trade_date": pd.to_datetime(d).date(),
-            "prob": 0.50,
-            "is_benchmark": True,
-        })
+                "prob": 0.50,
+                "is_benchmark": True,
+            }
+        )
     return pd.DataFrame(rows)
 
 
 class TestRegistry:
     def test_expected_methods_registered(self) -> None:
         assert set(available_entry_methods()) == {
-            "threshold", "top_n", "cross_sectional",
+            "threshold",
+            "top_n",
+            "cross_sectional",
         }
 
     def test_register_new_method(self) -> None:
@@ -53,6 +59,7 @@ class TestRegistry:
             out["side"] = "flat"
             out["selected"] = False
             return out
+
         try:
             assert "test_custom_entry" in available_entry_methods()
         finally:
@@ -60,6 +67,7 @@ class TestRegistry:
 
     def test_register_duplicate_raises(self) -> None:
         with pytest.raises(ValueError):
+
             @register_entry("threshold")
             def _dup(preds, settings):
                 return preds
@@ -72,27 +80,26 @@ class TestThreshold:
         out = apply_entry_rules(preds, rs)
 
         # 2024-01-02: B(0.60), D(0.71)
-        d1 = out[(out["trade_date"] == pd.to_datetime("2024-01-02").date())
-                 & out["selected"]]
+        d1 = out[(out["trade_date"] == pd.to_datetime("2024-01-02").date()) & out["selected"]]
         assert set(d1["ticker"]) == {"B", "D"}
 
         # 2024-01-03: E(0.90)
-        d2 = out[(out["trade_date"] == pd.to_datetime("2024-01-03").date())
-                 & out["selected"]]
+        d2 = out[(out["trade_date"] == pd.to_datetime("2024-01-03").date()) & out["selected"]]
         assert set(d2["ticker"]) == {"E"}
 
         # 2024-01-04: B(0.80), C(0.65), E(0.70)
-        d3 = out[(out["trade_date"] == pd.to_datetime("2024-01-04").date())
-                 & out["selected"]]
+        d3 = out[(out["trade_date"] == pd.to_datetime("2024-01-04").date()) & out["selected"]]
         assert set(d3["ticker"]) == {"B", "C", "E"}
 
     def test_strict_inequality(self) -> None:
         """prob == threshold must NOT be selected."""
-        preds = pd.DataFrame({
-            "ticker": ["A"],
-            "trade_date": [pd.to_datetime("2024-01-02").date()],
-            "prob": [0.55],
-        })
+        preds = pd.DataFrame(
+            {
+                "ticker": ["A"],
+                "trade_date": [pd.to_datetime("2024-01-02").date()],
+                "prob": [0.55],
+            }
+        )
         rs = RiskSettings(entry_method="threshold", entry_prob_threshold=0.55)
         out = apply_entry_rules(preds, rs)
         assert out.loc[0, "side"] == "flat"
@@ -111,12 +118,10 @@ class TestTopN:
         rs = RiskSettings(entry_method="top_n", entry_top_n=2)
         out = apply_entry_rules(preds, rs)
 
-        d1 = out[(out["trade_date"] == pd.to_datetime("2024-01-02").date())
-                 & out["selected"]]
+        d1 = out[(out["trade_date"] == pd.to_datetime("2024-01-02").date()) & out["selected"]]
         assert set(d1["ticker"]) == {"D", "B"}  # 0.71, 0.60
 
-        d3 = out[(out["trade_date"] == pd.to_datetime("2024-01-04").date())
-                 & out["selected"]]
+        d3 = out[(out["trade_date"] == pd.to_datetime("2024-01-04").date()) & out["selected"]]
         assert set(d3["ticker"]) == {"B", "E"}  # 0.80, 0.70
 
     def test_top_n_excludes_benchmark(self) -> None:
@@ -128,11 +133,13 @@ class TestTopN:
         assert not out.loc[out["ticker"] == "SPY", "selected"].any()
 
     def test_top_n_fewer_than_n(self) -> None:
-        preds = pd.DataFrame({
-            "ticker": ["A", "B"],
-            "trade_date": [pd.to_datetime("2024-01-02").date()] * 2,
-            "prob": [0.6, 0.7],
-        })
+        preds = pd.DataFrame(
+            {
+                "ticker": ["A", "B"],
+                "trade_date": [pd.to_datetime("2024-01-02").date()] * 2,
+                "prob": [0.6, 0.7],
+            }
+        )
         rs = RiskSettings(entry_method="top_n", entry_top_n=5)
         out = apply_entry_rules(preds, rs)
         assert out["selected"].sum() == 2  # only 2 rows exist
@@ -156,12 +163,14 @@ class TestCrossSectional:
         # A,B,C: 0.30, 0.70, 0.80 -> median 0.70 -> above: C(0.80) only
         # SPY: 0.99 -> if included, 4 values [0.30,0.70,0.80,0.99] median=0.75
         #             -> above: C(0.80), SPY(0.99) -- different!
-        preds = pd.DataFrame({
-            "ticker": ["A", "B", "C", "SPY"],
-            "trade_date": [pd.to_datetime("2024-01-02").date()] * 4,
-            "prob": [0.30, 0.70, 0.80, 0.99],
-            "is_benchmark": [False, False, False, True],
-        })
+        preds = pd.DataFrame(
+            {
+                "ticker": ["A", "B", "C", "SPY"],
+                "trade_date": [pd.to_datetime("2024-01-02").date()] * 4,
+                "prob": [0.30, 0.70, 0.80, 0.99],
+                "is_benchmark": [False, False, False, True],
+            }
+        )
         rs = RiskSettings(entry_method="cross_sectional")
         out = apply_entry_rules(preds, rs)
         assert set(out.loc[out["selected"], "ticker"]) == {"C"}
@@ -204,11 +213,13 @@ class TestPurityAndSchema:
 
 class TestEdgeCases:
     def test_nan_prob_forced_flat(self) -> None:
-        preds = pd.DataFrame({
-            "ticker": ["A", "B"],
-            "trade_date": [pd.to_datetime("2024-01-02").date()] * 2,
-            "prob": [np.nan, 0.9],
-        })
+        preds = pd.DataFrame(
+            {
+                "ticker": ["A", "B"],
+                "trade_date": [pd.to_datetime("2024-01-02").date()] * 2,
+                "prob": [np.nan, 0.9],
+            }
+        )
         out = apply_entry_rules(preds, RiskSettings())
         assert out.loc[0, "side"] == "flat"
         assert out.loc[1, "side"] == "long"
@@ -220,11 +231,13 @@ class TestEdgeCases:
         assert out["selected"].sum() > 0
 
     def test_empty_input(self) -> None:
-        preds = pd.DataFrame({
-            "ticker": pd.Series([], dtype=str),
-            "trade_date": pd.Series([], dtype="object"),
-            "prob": pd.Series([], dtype=float),
-        })
+        preds = pd.DataFrame(
+            {
+                "ticker": pd.Series([], dtype=str),
+                "trade_date": pd.Series([], dtype="object"),
+                "prob": pd.Series([], dtype=float),
+            }
+        )
         out = apply_entry_rules(preds, RiskSettings())
         assert len(out) == 0
         assert "side" in out.columns

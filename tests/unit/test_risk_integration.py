@@ -14,17 +14,16 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from risk.config import RiskSettings
 from risk.entry import apply_entry_rules
 from risk.limits import apply_all_limits
 from risk.staking import compute_weights
 
-
 # =====================================================================
 # Synthetic fixtures (deterministic)
 # =====================================================================
+
 
 def _predictions(n_dates: int = 12, n_tickers: int = 3) -> pd.DataFrame:
     """Predictions frame: n_dates x (n_tickers + 1 benchmark)."""
@@ -33,20 +32,24 @@ def _predictions(n_dates: int = 12, n_tickers: int = 3) -> pd.DataFrame:
     rows = []
     for d in dates:
         for i in range(n_tickers):
-            rows.append({
-                "ticker": f"T{i}",
+            rows.append(
+                {
+                    "ticker": f"T{i}",
+                    "trade_date": d,
+                    "prob": float(rng.uniform(0.35, 0.85)),
+                    "realized_vol": float(rng.uniform(0.15, 0.35)),
+                    "is_benchmark": False,
+                }
+            )
+        rows.append(
+            {
+                "ticker": "SPY",
                 "trade_date": d,
-                "prob": float(rng.uniform(0.35, 0.85)),
-                "realized_vol": float(rng.uniform(0.15, 0.35)),
-                "is_benchmark": False,
-            })
-        rows.append({
-            "ticker": "SPY",
-            "trade_date": d,
-            "prob": 0.50,
-            "realized_vol": 0.15,
-            "is_benchmark": True,
-        })
+                "prob": 0.50,
+                "realized_vol": 0.15,
+                "is_benchmark": True,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -57,13 +60,15 @@ def _prices(preds: pd.DataFrame, seed: int = 7) -> pd.DataFrame:
     for t in sorted(preds["ticker"].unique()):
         px = 100.0
         for d in sorted(preds["trade_date"].unique()):
-            px *= (1.0 + float(rng.normal(0.0, 0.008)))
+            px *= 1.0 + float(rng.normal(0.0, 0.008))
             rows.append({"ticker": t, "trade_date": d, "close": float(px)})
     return pd.DataFrame(rows)
 
 
 def _run_pipeline(
-    preds: pd.DataFrame, prices: pd.DataFrame, settings: RiskSettings,
+    preds: pd.DataFrame,
+    prices: pd.DataFrame,
+    settings: RiskSettings,
 ) -> pd.DataFrame:
     """Full pipeline: entry -> filter long -> staking -> limits."""
     # 1. Entry
@@ -72,11 +77,13 @@ def _run_pipeline(
 
     if long_only.empty:
         # Edge case: no positions. Return empty limits output with schema.
-        empty = pd.DataFrame({
-            "ticker": pd.Series([], dtype=str),
-            "trade_date": pd.Series([], dtype="object"),
-            "weight": pd.Series([], dtype=float),
-        })
+        empty = pd.DataFrame(
+            {
+                "ticker": pd.Series([], dtype=str),
+                "trade_date": pd.Series([], dtype="object"),
+                "weight": pd.Series([], dtype=float),
+            }
+        )
         return apply_all_limits(empty, prices, settings)
 
     # 2. Staking
@@ -92,6 +99,7 @@ def _run_pipeline(
 # Test 1: Pipeline composes end-to-end
 # =====================================================================
 
+
 class TestPipelineComposition:
     def test_runs_and_produces_valid_weights(self) -> None:
         preds = _predictions()
@@ -100,15 +108,18 @@ class TestPipelineComposition:
             entry_method="threshold",
             entry_prob_threshold=0.55,
             staking_method="kelly",
-            dd_derisk_factor=1.0,   # for test isolation (no derisk scaling)
+            dd_derisk_factor=1.0,  # for test isolation (no derisk scaling)
         )
         out = _run_pipeline(preds, prices, rs)
 
         # Output shape/columns
         assert set(out.columns) == {
-            "ticker", "trade_date",
-            "weight_before_limits", "weight",
-            "stop_out", "dd_state",
+            "ticker",
+            "trade_date",
+            "weight_before_limits",
+            "weight",
+            "stop_out",
+            "dd_state",
         }
         # Weights in [0, cap]
         assert (out["weight"] >= 0.0).all()
@@ -147,7 +158,8 @@ class TestPipelineComposition:
         a = _run_pipeline(preds, prices, rs)
         b = _run_pipeline(preds, prices, rs)
         pd.testing.assert_frame_equal(
-            a.reset_index(drop=True), b.reset_index(drop=True),
+            a.reset_index(drop=True),
+            b.reset_index(drop=True),
         )
 
     def test_inputs_not_mutated(self) -> None:
@@ -163,6 +175,7 @@ class TestPipelineComposition:
 # =====================================================================
 # Test 2: Prefix stability (truncation)
 # =====================================================================
+
 
 class TestPrefixStability:
     """Computing on the full dataset vs a truncated dataset must give
@@ -226,17 +239,15 @@ class TestPrefixStability:
             .sort_values(["ticker", "trade_date"])
             .reset_index(drop=True)
         )
-        trunc_sorted = (
-            truncated
-            .sort_values(["ticker", "trade_date"])
-            .reset_index(drop=True)
-        )
+        trunc_sorted = truncated.sort_values(["ticker", "trade_date"]).reset_index(drop=True)
         pd.testing.assert_frame_equal(
-            full_overlap.drop(columns=["dd_state"]),  # dd_state might differ by halt stickiness? compare anyway
+            # dd_state compared separately below
+            full_overlap.drop(columns=["dd_state"]),
             trunc_sorted.drop(columns=["dd_state"]),
         )
         pd.testing.assert_series_equal(
-            full_overlap["dd_state"], trunc_sorted["dd_state"],
+            full_overlap["dd_state"],
+            trunc_sorted["dd_state"],
             check_names=False,
         )
 
@@ -244,6 +255,7 @@ class TestPrefixStability:
 # =====================================================================
 # Test 3: Poison future rows, past unchanged
 # =====================================================================
+
 
 class TestPoisonFuture:
     """The core anti-look-ahead probe.
@@ -309,14 +321,8 @@ class TestPoisonFuture:
 
         polluted = _run_pipeline(preds, poisoned_prices, rs)
 
-        clean_past = (
-            clean[clean["trade_date"] <= cutoff]
-            .reset_index(drop=True)
-        )
-        polluted_past = (
-            polluted[polluted["trade_date"] <= cutoff]
-            .reset_index(drop=True)
-        )
+        clean_past = clean[clean["trade_date"] <= cutoff].reset_index(drop=True)
+        polluted_past = polluted[polluted["trade_date"] <= cutoff].reset_index(drop=True)
         # weight and stop_out must match; dd_state must match too
         # (because DD at a date is determined by NAV history up to
         # and including that date).
@@ -326,6 +332,7 @@ class TestPoisonFuture:
 # =====================================================================
 # Test 4: Structural anti-look-ahead
 # =====================================================================
+
 
 class TestStructuralAntiLookAhead:
     """The pipeline must not consume any future-derived column."""
@@ -357,6 +364,7 @@ class TestStructuralAntiLookAhead:
 # Test 5: Benchmark is never traded
 # =====================================================================
 
+
 class TestBenchmarkNotTraded:
     def test_full_pipeline_never_trades_spy(self) -> None:
         preds = _predictions()
@@ -365,19 +373,18 @@ class TestBenchmarkNotTraded:
         prices = _prices(preds)
         rs = RiskSettings(
             entry_method="top_n",
-            entry_top_n=10,   # large enough to tempt SPY
+            entry_top_n=10,  # large enough to tempt SPY
             staking_method="kelly",
             dd_derisk_factor=1.0,
         )
         out = _run_pipeline(preds, prices, rs)
-        assert not (out["ticker"] == "SPY").any(), (
-            "SPY (benchmark) entered a position"
-        )
+        assert not (out["ticker"] == "SPY").any(), "SPY (benchmark) entered a position"
 
 
 # =====================================================================
 # Test 6: Full pipeline stress — extreme configurations
 # =====================================================================
+
 
 class TestExtremeConfigs:
     def test_tight_threshold_no_positions(self) -> None:
