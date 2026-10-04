@@ -149,9 +149,9 @@ parameters without touching the backtest loop:
 
 ```python
 STAKING = {"kelly": ..., "fixed_fractional": ..., "equal_weight": ..., "vol_target": ...}
-ENTRY   = {"threshold": ..., "top_n": ..., "cross_sectional": ...}
-LIMITS  = {"stop_loss": ..., "dd_halt": ...}
-COST    = {"bp_model": ...}
+ENTRY = {"threshold": ..., "top_n": ..., "cross_sectional": ...}
+LIMITS = {"stop_loss": ..., "dd_halt": ...}
+COST = {"bp_model": ...}
 ```
 
 Selection is via `RiskSettings.staking_method`, `entry_method`, etc.
