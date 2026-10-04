@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------
+# Docker build context exclusions.
+# Second line of defence: git-ignored files are already absent
+# from a fresh clone, but they may exist in a developer workspace.
+# ---------------------------------------------------------------
+
+# Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local state (bind-mounted at runtime, never baked)
+data/
+mlruns/
+reports/
+*.duckdb
+*.duckdb.wal
+*.db
+*.db-journal
+*.sqlite
+
+# Large fixture images / previews
+docs/preview/*.png
+
+# Local env files (only .env.example is safe)
+.env
+.env.*
+!.env.example
+
+# Archived development directories
+orchestration/_archive/
+risk/_archive/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Docker build files themselves (not needed inside the image)
+Dockerfile
+Dockerfile.*
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml

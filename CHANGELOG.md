@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (M6 — MLflow tracking)
+
+- **ADR 0015** — MLflow tracking + Model Registry design (8 decisions:
+  SQLite backend, single experiment, run_name = M5 run_id, prefixed
+  params, namespaced metrics, artifact reuse, refit-on-full-data +
+  @challenger/@champion, opt-in `--mlflow`).
+- `tracking/config.py` — `TrackingSettings` (`DBP_TRACK_*` env prefix,
+  URI scheme validator).
+- `tracking/client.py` — optional MLflow import guard, repo-aware SQLite
+  URI resolution, idempotent experiment setup, run context manager,
+  best-effort git info/diff + pip freeze helpers.
+- `tracking/logger.py` — params (54 fields), metrics (41 fields,
+  `pooled/*`, `deflated/*`, `agg/*`, `baseline/<name>/*`, `fold/<id>/*`),
+  and artifact upload from `data/backtest/{run_id}/`.
+- `tracking/registry.py` — `refit_full_model` (no MLflow dep),
+  `register_model` (logs to a separate registry-purpose run), and
+  `log_and_register_model` orchestrator. Alias `@challenger` moved
+  automatically; `@champion` reserved for manual promotion.
+- `tracking/cli.py` — `dbp-tracking list-runs | best-run | compare`.
+- `scripts/run_backtest.py` — new flags `--mlflow`, `--no-mlflow`,
+  `--tracking-uri`, `--no-register-model`. Default remains off; the
+  pipeline runs unchanged without MLflow installed.
+- 78 unit tests in `tests/unit/test_tracking_*.py`.
+- `[tracking]` extra in `pyproject.toml` brings in `mlflow`; the
+  `tracking*` package is now part of setuptools discovery.
+
+### Fixed (M6 discovered)
+
+- **`register_model` failed on MLflow 3.x** with
+  "Untrusted types found in the file: ['numpy.dtype']" because MLflow 3
+  changed the default sklearn serialization to `skops`. Fix: pass
+  `skops_trusted_types=["numpy.dtype"]` and switch from the deprecated
+  `artifact_path=` to `name=`.
+- **`get_git_info` raised outside a repo.** `log_backtest_run` crashed
+  when the CLI was launched from a cwd that was not a git repository
+  (e.g. running the backtest against data in `/tmp`). Git info/diff
+  helpers are now strictly best-effort, and `_run_tracking` receives
+  `repo_root=REPO` explicitly.
+
+### Changed
+
+- `docs/adr/` count is now 0001–0015.
+
 ### Added (M7 — Prefect orchestration)
 
 - **ADR 0016** — Prefect 3 orchestration design (10 decisions:
@@ -43,3 +86,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   design notes.
 - `docs/adr/` count is now 0001–0016.
 
+### Added (M8 — Docker + make up)
+
+- **ADR 0017** — Docker design (12 decisions: python:3.11-slim,
+  single-stage, non-root, cache-friendly deps, bind-mounted state,
+  two services with profiles, `sleep infinity` default, optional
+  bootstrap entrypoint, no published ports by default, Make targets
+  wrap compose, static verification only).
+- `Dockerfile` — Python 3.11-slim, non-root `app` user, `tini` PID 1,
+  stub-package dependency warm-up, editable install with
+  `[dbt,quality,backtest,tracking,orchestration]` extras.
+- `.dockerignore` — excludes `.git`, caches, local state, secrets.
+- `scripts/docker_entrypoint.sh` — optional `DBP_DOCKER_BOOTSTRAP=1`
+  bootstrap (mkdir state dirs, verify importable, warn on missing
+  `.env`), then `exec "$@"`.
+- `docker-compose.yml` — `worker` service (always up, no ports) +
+  `prefect-server` service (profile `served`, port `:4200`).
+- Makefile: 10 new targets — `docker-build`, `up`, `down`, `logs`,
+  `shell`, `run`, `pipeline`, `prefect-up`, `prefect-down`,
+  `orchestrate`.
+
+### Notes
+
+- **Colab cannot run Docker.** M8 verification is static:
+  `yaml.safe_load` on compose, Dockerfile structure assertion,
+  `bash -n` on entrypoint, `make -n` on new targets. End-to-end
+  `make up` is documented as an acceptance test in
+  `docs/runbook.md`.
+- **`.env` is not bind-mounted.** Compose loads it via
+  `env_file.required: false` and exports it to the container
+  environment; pydantic-settings reads from `os.environ`. This
+  keeps `make up` working on a fresh clone that has no `.env` yet.
+- `docs/adr/` count is now 0001–0017.

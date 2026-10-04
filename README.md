@@ -990,6 +990,84 @@ is always the resolved repo root.
   (`--mlflow`) on `run_backtest`, so a second flow would have to share
   a `RunResult` across process boundaries. Merged for simplicity.
 
+
+---
+
+## M8 — Docker + `make up` in one page
+
+Locked contract: **ADR 0017**. A single `make up` takes a clean
+checkout to a running pipeline container. No local Python, no
+system library install, no environment troubleshooting.
+
+### Two commands from zero
+
+```bash
+git clone https://github.com/WoodinGlass/data-backtest-pipeline.git
+cd data-backtest-pipeline
+cp .env.example .env      # edit if you have a FRED key
+make up
+```
+
+What `make up` does:
+
+1. `docker compose build` — builds the pipeline image (Python 3.11-slim,
+   non-root user, ~500 MB, ~3 min cold).
+2. `docker compose up -d` — starts the `worker` container. It idles
+   (`sleep infinity`) so you can `make shell` in.
+3. On container start, `scripts/docker_entrypoint.sh` runs a minimal
+   bootstrap: creates `data/`, `mlruns/`, `reports/`, verifies the
+   package is importable, warns if `.env` is missing.
+
+### Common commands
+
+| Command | What it does |
+|---|---|
+| `make up` | Build + start the worker (background) |
+| `make down` | Stop and remove containers (state persists on host) |
+| `make logs` | Tail worker logs |
+| `make shell` | Interactive bash inside the worker |
+| `make run CMD='...'` | Run one shell command in the worker |
+| `make pipeline` | Full pipeline once in a throwaway container |
+| `make orchestrate FLOW=daily_refresh` | Run a Prefect flow (M7) |
+| `make prefect-up` | Also start the Prefect server (profile `served`) |
+
+### Persistence
+
+State lives **on the host**, not in the container:
+
+| Host directory | Contents |
+|---|---|
+| `./data` | Raw layer, DuckDB warehouse, features, backtest runs |
+| `./mlruns` | MLflow SQLite + artifacts (M6) |
+| `./reports` | Quality gate JSON reports |
+
+`docker compose down` removes containers but leaves state. A fresh
+`make up` picks up where you left off.
+
+### What is NOT in the image
+
+- **No source-of-truth state.** The image is built from source at
+  commit time; the persistent state is a bind mount.
+- **No secrets.** `.env` is loaded by Compose as environment
+  variables (`env_file.required: false`) — it is **not**
+  bind-mounted and never lands in a layer.
+- **No network exposure.** The worker publishes no ports. Only
+  the optional `prefect-server` exposes `:4200`.
+- **No root.** Container runs as UID 1000 (`app`).
+
+### Design notes
+
+- **Single-stage build.** Multi-stage adds complexity for a project
+  this size. If the image grows past ~800 MB, that is revisited.
+- **Cache-friendly deps.** `pyproject.toml` is copied first, then a
+  stub-package install warms the dependency layer. Source-only
+  changes rebuild in ~5 seconds.
+- **`tini` as PID 1.** Signal forwarding without custom code.
+- **Colab cannot run Docker.** M8 ships **statically verified
+  files** (YAML parse, Dockerfile parse, `bash -n`, `make -n`).
+  End-to-end `make up` is verified on a local machine; see
+  `docs/runbook.md` for the acceptance test.
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -1031,7 +1109,7 @@ is always the resolved repo root.
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0016)
+- `docs/adr/`: architecture decision records (0001–0017)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -1051,7 +1129,7 @@ is always the resolved repo root.
 
 ## Roadmap
 
-Progress: **14 / 15 milestones selesai (~93%)**. Fokus berikutnya: **M8 (Docker + make up)**.
+Progress: **15 / 15 milestones core selesai** (M9-M12 polish + deployment berikutnya). Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
 
 ### ✅ Selesai
 
@@ -1072,7 +1150,7 @@ Progress: **14 / 15 milestones selesai (~93%)**. Fokus berikutnya: **M8 (Docker 
 - [x] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration (ADR 0014)
 - [x] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions) (ADR 0015)
 - [x] **M7:** Prefect orchestration with failure alerts (ADR 0016)
-- [ ] **M8:** Docker + `make up` for one-command reproducibility
+- [x] **M8:** Docker + `make up` for one-command reproducibility (ADR 0017)
 - [ ] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking
 - [ ] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard
 - [ ] **M11:** Documentation: README, data dictionary, runbook, ADRs

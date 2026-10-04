@@ -1,4 +1,4 @@
-.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci ingest-macro install-all ingest-sec features features-info
+.PHONY: help install install-all lint format test test-int test-all dbt-build ingest ingest-macro ingest-sec quality quality-json features features-info backtest app orchestrate clean ci up down logs shell run pipeline docker-build prefect-up prefect-down
 
 
 help:  ## Show this help
@@ -73,11 +73,54 @@ backtest:  ## Run the walk-forward backtest
 app:  ## Start the Streamlit dashboard
 	streamlit run app/streamlit_app.py
 
-up:  ## Start all services (docker compose)
+# --- Docker ---------------------------------------------------------------
+
+docker-build:  ## Build the pipeline image
+	docker compose build
+
+up:  ## Build + start the worker container (background)
 	docker compose up -d --build
 
-down:  ## Stop all services
+down:  ## Stop and remove containers (state on ./data persists)
 	docker compose down
+
+logs:  ## Tail worker logs
+	docker compose logs -f worker
+
+shell:  ## Interactive bash inside the worker container
+	docker compose exec worker bash
+
+run:  ## Run one command in the worker (usage: make run CMD='...')
+	@if [ -z "$(CMD)" ]; then \
+		echo "usage: make run CMD='<shell command>'"; \
+		exit 2; \
+	fi
+	docker compose exec worker sh -lc "$(CMD)"
+
+pipeline:  ## Run the full pipeline once in a throwaway container
+	docker compose run --rm worker sh -lc "\
+		python -m ingestion.cli && \
+		python -m ingestion.macro.cli && \
+		python -m ingestion.sec.cli && \
+		dbt build --project-dir dbt --profiles-dir dbt && \
+		python -m quality.cli --tickers-from-raw --json reports/quality.json && \
+		python -m features.cli && \
+		python scripts/run_backtest.py --mlflow"
+
+prefect-up:  ## Start worker + Prefect server (profile: served)
+	docker compose --profile served up -d --build
+
+prefect-down:  ## Stop worker + Prefect server
+	docker compose --profile served down
+
+orchestrate:  ## Run a flow inside the worker (usage: make orchestrate FLOW=daily_refresh)
+	@if [ -z "$(FLOW)" ]; then \
+		echo "usage: make orchestrate FLOW=<flow-name> [ARG=key=value ...]"; \
+		exit 2; \
+	fi
+	docker compose exec worker python -m orchestration.cli run $(FLOW) $(if $(ARG),--arg $(ARG),)
+
+# --- End Docker -----------------------------------------------------------
 
 clean:  ## Remove build artifacts and caches
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov .coverage

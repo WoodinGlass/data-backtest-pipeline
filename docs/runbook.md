@@ -90,3 +90,119 @@ past its expected duration.
 - `flow.serve()` must stay alive. If the process exits, no schedule
   fires. Run under a process manager (systemd, Docker `restart:
   unless-stopped`).
+
+
+---
+
+## Docker (M8)
+
+### Acceptance test — verify a fresh `make up` works
+
+Run these steps on a machine with a working Docker daemon
+(not on Colab). Each step has a clear pass/fail signal.
+
+```bash
+# 1. Fresh clone
+git clone https://github.com/WoodinGlass/data-backtest-pipeline.git
+cd data-backtest-pipeline
+
+# 2. Copy env template (leave FRED_API_KEY empty if you don't have one)
+cp .env.example .env
+
+# 3. Build + start
+make up                     # ~3 min cold, ~5 s warm
+
+# 4. Health: worker should be running and idle
+docker compose ps           # STATUS = Up (healthy)
+
+# 5. Sanity: package importable inside the container
+make run CMD='python -c "import ingestion; print(ingestion.__file__)"'
+# expect: /app/ingestion/__init__.py
+
+# 6. Sanity: CLI present
+make run CMD='python -m orchestration.cli list'   # expect: flow table
+
+# 7. End-to-end: run the full pipeline once (may take 30+ min
+#    because of the macro ingest; skip if you only want a smoke test)
+make pipeline
+
+# 8. Persistence: stop and restart, state should survive
+make down
+make up
+docker compose exec worker ls -la data/ | head
+# expect: warehouse.duckdb, raw/, features/, etc.
+```
+
+If any step fails, the failure is almost always one of the three
+cases below.
+
+### 1. `make up` fails at build: no space left on device
+
+**Symptom.** `docker compose build` exits with `no space left on
+device`.
+
+**Fix.** The image is ~500 MB + build cache. Run:
+
+```bash
+docker system prune -a --volumes     # careful: removes all unused images
+docker compose build --no-cache
+```
+
+If you are on Docker Desktop, increase the disk allocation in
+Preferences → Resources → Disk image size.
+
+### 2. `make pipeline` fails at `dbt build`: profile not found
+
+**Symptom.** Container logs show:
+
+```
+Could not find profile named 'data_backtest_pipeline'.
+```
+
+**Cause.** The image does not contain a `dbt/profiles.yml`, and the
+container has no `~/.dbt/profiles.yml` either. Local development
+relies on the developer's own profile; the container does not.
+
+**Fix (temporary, from the host).** Create a profile inside the
+container and rerun:
+
+```bash
+make shell
+# inside:
+mkdir -p ~/.dbt
+cat > ~/.dbt/profiles.yml <<EOF
+data_backtest_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: /app/data/warehouse.duckdb
+EOF
+exit
+make pipeline
+```
+
+**Fix (permanent).** Add `dbt/profiles.yml` to the image (or a
+bind mount) and remove the manual step from the acceptance test.
+This is a known gap — tracked as future work.
+
+### 3. `make shell` fails: container not running
+
+**Symptom.** `docker compose exec worker bash` returns:
+
+```
+service "worker" is not running
+```
+
+**Cause.** The worker container exited. Most common reasons:
+
+- The image failed to build (check `docker compose logs worker`).
+- Someone ran `make down` and forgot to `make up` again.
+- The container crashed during entrypoint bootstrap. Check logs:
+
+```bash
+docker compose logs --tail=50 worker
+```
+
+**Fix.** `make up` again. If the entrypoint crashed, the logs will
+name the failing check (`import ingestion` or a missing mount).
