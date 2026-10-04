@@ -104,6 +104,30 @@ class TestThreshold:
         out = apply_entry_rules(preds, rs)
         assert out.loc[0, "side"] == "flat"
 
+    def test_benchmark_forced_flat_even_above_threshold(self) -> None:
+        """Regression: SPY with prob above threshold must stay flat.
+
+        Bug found in M5 integration (M5.6b): the threshold rule did
+        not filter benchmark rows, unlike top_n and cross_sectional.
+        """
+        preds = pd.DataFrame(
+            {
+                "ticker": ["A", "SPY"],
+                "trade_date": [pd.to_datetime("2024-01-02").date()] * 2,
+                "prob": [0.90, 0.99],
+                "is_benchmark": [False, True],
+            }
+        )
+        rs = RiskSettings(
+            entry_method="threshold",
+            entry_prob_threshold=0.55,
+        )
+        out = apply_entry_rules(preds, rs)
+        # Non-benchmark selected, benchmark forced flat
+        assert out.loc[out["ticker"] == "A", "side"].iloc[0] == "long"
+        assert out.loc[out["ticker"] == "SPY", "side"].iloc[0] == "flat"
+        assert not out.loc[out["ticker"] == "SPY", "selected"].iloc[0]
+
 
 class TestTopN:
     def test_exactly_n_per_date(self) -> None:

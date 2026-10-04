@@ -73,9 +73,14 @@ def _select_threshold(
     This is the default method. It is independent per (ticker, date):
     the number of concurrent positions is not bounded by the rule
     itself (limits are handled in risk/limits.py).
+
+    Benchmark rows are forced flat, consistent with top_n and
+    cross_sectional. See ADR 0013 §4.
     """
     p = predictions["prob"].astype(float)
-    is_long = p > settings.entry_prob_threshold
+    eligible = _eligible_mask(predictions)
+
+    is_long = eligible & (p > settings.entry_prob_threshold)
     return _apply_side(predictions, is_long, settings)
 
 

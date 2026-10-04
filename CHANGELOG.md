@@ -6,32 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (M4.5 — Risk framework)
+### Added (M5 — Walk-forward backtest)
 
-- **ADR 0013** — risk framework contract (staking, entry, limits).
-- `risk/config.py` — `RiskSettings` (pydantic-settings, `DBP_RISK_*` env prefix).
-- `risk/staking.py` — quarter-Kelly, fixed-fractional, equal-weight, vol-target.
-- `risk/entry.py` — threshold, top-N, cross-sectional (benchmark excluded).
-- `risk/limits.py` — per-position stop-loss, cooldown, DD derisk, DD halt.
-- 104 unit tests in `tests/unit/test_risk_*.py`, including anti-look-ahead
-  checks (prefix stability + poison-future).
+- **ADR 0014** — walk-forward methodology (rolling 36m/3m/3m, purge +
+  embargo, logistic v1, time-decay weights, per-fold + pooled +
+  yearly reporting).
+- `backtest/config.py` — `BacktestSettings` (27 fields, 3 cross-field
+  validators, `DBP_BT_*` env prefix).
+- `backtest/split.py` — fold generator with purge (1 row) + embargo
+  (5 days), test windows non-overlapping.
+- `backtest/metrics.py` — classification (log loss, Brier, AUC, hit
+  rate, calibration), trading (Sharpe, CAGR, MDD, turnover,
+  cost-adjusted), advanced (bootstrap CI, deflated Sharpe).
+- `backtest/baselines.py` — B0 naive, B1 momentum 20d, B2 SPY
+  buy-and-hold, B3 always-long top-10 (registry pattern).
+- `backtest/model.py` — logistic regression with time-decay sample
+  weights (half-life 252d), median imputation, single-class fallback.
+- `backtest/portfolio.py` — `risk/` integration, rebalance band
+  (1% NAV), Fed Funds idle cash, cost model.
+- `backtest/runner.py` — per-fold orchestration, reproducibility
+  (global seed), persisted artifacts (predictions, returns, metrics).
+- `backtest/report.py` — aggregate per fold + pooled + yearly,
+  bootstrap CI, deflated Sharpe, calibration + equity curve plots.
+- `scripts/run_backtest.py` — CLI end-to-end (features + warehouse
+  + cash rates).
+- ~130 unit tests in `tests/unit/test_backtest_*.py`.
 
-### Fixed
+### Fixed (M5 discovered)
 
-- **`risk/limits.py`** — row order was sorted by index *label* instead of
-  position, corrupting output when input index was non-default. Fixed by
-  using `range(len)` as the restore key. Caught by
-  `test_row_order_matches_input`.
-- **`risk/config.py`** — the cross-field validator rejected `stop_loss_pct`
-  deeper than `dd_halt_trigger`. That is a valid configuration (used to
-  disable the per-position stop and let DD halt be the only breaker).
-  The only hard invariant is `dd_derisk_trigger > dd_halt_trigger`
-  (shallower in absolute terms).
+- **`risk/entry.py::_select_threshold` did not exclude benchmark
+  rows.** Unlike `top_n` and `cross_sectional`, the threshold rule
+  only compared `prob > threshold`; SPY could be selected if its
+  prob exceeded the threshold, violating ADR 0013 §4. Latent from
+  M4.5 (M4.5 fixture had SPY.prob=0.50 < threshold=0.55 by
+  coincidence). Found by the M5 integration test. Fixed by reusing
+  `_eligible_mask`; regression test added.
 
-### Notes
+### Changed
 
-- Derisk and halt are not independent. Once derisk halves exposure, DD
-  grows more slowly, and halt (`-20%`) may never trigger even during a
-  severe market move. This is by design. To make halt reachable for
-  testing or a stricter regime, set `dd_derisk_factor=1.0`.
+- `docs/adr/` count is now 0001–0014.
 

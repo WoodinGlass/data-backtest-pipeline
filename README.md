@@ -729,6 +729,81 @@ prediction.
 
 ---
 
+
+---
+
+## M5 — Walk-forward backtest in one page
+
+Locked contract: **ADR 0014**. All parameters live in
+`backtest/config.py::BacktestSettings`, env-overridable via `DBP_BT_*`.
+
+### Protocol
+
+| Decision | Value |
+|---|---|
+| Split | **Rolling 36m train, 3m test, 3m step** — ~35 folds (2018-01 → 2026-10) |
+| Purge + embargo | **1-row purge + 5-day embargo** = 6-trading-day gap |
+| Model v1 | **Logistic regression** + `StandardScaler` (median impute); `C=0.1` fixed |
+| Sample weight | **Time decay**, half-life 252 trading days |
+| Direction | Long + flat (from `risk/`, ADR 0013) |
+| Costs | 5 bp round-trip (from `risk/`, ADR 0013) |
+| Idle cash | Fed Funds (`mc_fedfunds`, fallback 0%) |
+
+### Baselines (all evaluated with same risk framework + costs)
+
+| ID | Rule | Notes |
+|---|---|---|
+| B0 | Naive 50/50 | Classification only, no trades |
+| B1 | Momentum 20d | p=1 if `px_return_20d > 0`, else 0.45 |
+| B2 | **SPY buy-and-hold** | The benchmark to beat |
+| B3 | Always-long top-10 | Cross-sectional rank, benchmark excluded |
+
+### Metrics
+
+- **Per fold:** log loss, Brier, AUC, hit rate, calibration slope + intercept,
+  Sharpe, CAGR, MDD, turnover, cost-adjusted return
+- **Aggregated:** median + IQR across folds; mean ± std kept for reference
+- **Pooled:** all folds concatenated (statistically stable)
+- **Yearly:** Sharpe per calendar year (~9 numbers)
+- **Bootstrap CI:** 1000 resamples, block=5, date-blocked
+- **Deflated Sharpe** (Bailey & López de Prado 2014): N=4 specifications
+
+### Modules
+
+- `backtest/config.py` — `BacktestSettings` (27 fields, 3 cross-field validators)
+- `backtest/split.py` — walk-forward fold generator with purge + embargo
+- `backtest/metrics.py` — classification, trading, bootstrap, deflated Sharpe (pure)
+- `backtest/baselines.py` — B0/B1/B2/B3, registry pattern
+- `backtest/model.py` — logistic regression + time-decay sample weights
+- `backtest/portfolio.py` — `risk/` integration + rebalance band + cash + costs
+- `backtest/runner.py` — orchestrate per-fold fit → predict → trade → score
+- `backtest/report.py` — aggregate, bootstrap, deflated Sharpe, plots
+- `scripts/run_backtest.py` — CLI end-to-end (reads features + warehouse)
+
+### Test coverage
+
+| File | Tests | Focus |
+|---|---|---|
+| `test_backtest_config.py` | 17 | Defaults, validators, env override |
+| `test_backtest_split.py` | 18 | Add-months, fold generation, gap, overlap |
+| `test_backtest_metrics.py` | 24 | Classification, trading, bootstrap, deflated |
+| `test_backtest_baselines.py` | 16 | B0/B1/B2/B3, benchmark exclusion, NaN handling |
+| `test_backtest_model.py` | 15 | Time decay, imputation, single-class fallback |
+| `test_backtest_portfolio.py` | 22 | Rebalance band, cash, costs, benchmark exclusion |
+| `test_backtest_runner.py` | 18 | End-to-end, prefix stability, artifacts |
+| **Total** | **~130** | |
+
+### Bug caught in M5
+
+**`risk/entry.py::_select_threshold` did not exclude benchmark rows.**
+Unlike `top_n` and `cross_sectional` (which use `_eligible_mask`),
+the threshold rule only compared `prob > threshold`. If `SPY.prob`
+exceeded the threshold, SPY entered a position — violating
+ADR 0013 §4. This was latent from M4.5 (test fixture had SPY at
+0.50, below the 0.55 threshold by coincidence) and was only exposed
+by the M5 integration test. Fixed by reusing `_eligible_mask`;
+regression test added to `tests/unit/test_risk_entry.py`.
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -770,7 +845,7 @@ prediction.
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0013)
+- `docs/adr/`: architecture decision records (0001–0014)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -790,7 +865,7 @@ prediction.
 
 ## Roadmap
 
-Progress: **11 / 15 milestones selesai (~73%)**. Fokus berikutnya: **M5 (walk-forward backtest)**.
+Progress: **12 / 15 milestones selesai (~80%)**. Fokus berikutnya: **M6 (MLflow tracking)**.
 
 ### ✅ Selesai
 
@@ -808,7 +883,7 @@ Progress: **11 / 15 milestones selesai (~73%)**. Fokus berikutnya: **M5 (walk-fo
 
 ### 🚧 Berikutnya
 
-- [ ] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration
+- [x] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration (ADR 0014)
 - [ ] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions)
 - [ ] **M7:** Prefect orchestration with failure alerts
 - [ ] **M8:** Docker + `make up` for one-command reproducibility
