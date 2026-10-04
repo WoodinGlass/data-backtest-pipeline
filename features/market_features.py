@@ -94,4 +94,11 @@ def add_market_context_features(
     computed = out.groupby("ticker", sort=False, group_keys=False).apply(_compute)
     out[beta_col] = computed[beta_col].astype("float64")
     out[corr_col] = computed[corr_col].astype("float64")
+
+    # `benchmark_log_return` is an internal helper column used to compute
+    # beta and correlation. It is not a feature, not metadata; drop it
+    # before returning so it does not leak into the feature table.
+    if "benchmark_log_return" in out.columns:
+        out = out.drop(columns=["benchmark_log_return"])
+
     return out

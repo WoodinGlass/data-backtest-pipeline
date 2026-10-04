@@ -85,6 +85,7 @@ app = [
 dbp-ingest = "ingestion.cli:main"
 dbp-ingest-macro = "ingestion.macro.cli:main"
 dbp-ingest-sec = "ingestion.sec.cli:main"
+dbp-features = "features.cli:main"
 dbp-quality = "quality.cli:main"
 
 [tool.setuptools.packages.find]

@@ -138,3 +138,23 @@ def test_hash_sensitive_to_value(settings: FeatureSettings) -> None:
     modified.loc[100, "px_ret_1d"] = 999.999
     h2 = feature_content_hash(modified)
     assert h1 != h2
+
+
+def test_assemble_no_unknown_columns(settings: FeatureSettings) -> None:
+    """Regression: helper columns must not leak into the feature table.
+
+    Specifically `benchmark_log_return` was once added by
+    add_market_context_features and left in the output. The assembler
+    now filters to a known set of columns.
+    """
+    ret, mac, fund = _build_sources()
+    out = assemble_features(ret, mac, fund, settings=settings)
+    assert "benchmark_log_return" not in out.columns
+
+    allowed = (
+        {"ticker", "trade_date", "sector"}
+        | set(all_feature_columns(settings))
+        | {"adj_close", "log_return", "next_log_return", "next_return_positive", "is_benchmark"}
+    )
+    extra = [c for c in out.columns if c not in allowed]
+    assert extra == [], f"unexpected columns leaked: {extra}"

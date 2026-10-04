@@ -1,4 +1,4 @@
-.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci ingest-macro install-all ingest-sec
+.PHONY: help install lint format test test-int test-all dbt-build ingest quality quality-json backtest app up down clean ci ingest-macro install-all ingest-sec features features-info
 
 
 help:  ## Show this help
@@ -60,6 +60,12 @@ dbt-build:  ## Run dbt build (use FIXTURE=1 for the committed CI fixture)
 		echo "dbt build against real raw layer (data/raw/...)"; \
 		dbt build --project-dir dbt --profiles-dir dbt; \
 	fi
+
+features:  ## Build the point-in-time feature table
+	python -m features.cli
+
+features-info:  ## Print feature file info
+	python -m features.cli --info
 
 backtest:  ## Run the walk-forward backtest
 	python -m backtest.run

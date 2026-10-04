@@ -144,6 +144,25 @@ def assemble_features(
     # 5. Fundamental (fd_*). Left joins on (ticker, trade_date).
     df = add_fundamental_features(df, fund_df, settings=settings)
 
+    # Defensive: drop any column that is neither metadata, a known
+    # feature, nor a label. This catches helper columns leaked by a
+    # builder (e.g. benchmark_log_return from market_features).
+    allowed = (
+        set(_META_COLUMNS)
+        | set(all_feature_columns(settings))
+        | {
+            # labels and contextual metadata carried for the backtest
+            "adj_close",
+            "log_return",
+            "next_log_return",
+            "next_return_positive",
+            "is_benchmark",
+        }
+    )
+    extra = [c for c in df.columns if c not in allowed]
+    if extra:
+        df = df.drop(columns=extra)
+
     return df.sort_values(["ticker", "trade_date"]).reset_index(drop=True)
 
 
