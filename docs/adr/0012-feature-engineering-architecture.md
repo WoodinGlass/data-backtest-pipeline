@@ -144,3 +144,79 @@ feature.
 - ADR 0010 — SEC filing-date PIT.
 - ADR 0011 — memory strategy for large models.
 - ADR 0013 (planned, M4.5) — risk framework (parameter + formulas).
+
+## Implementation notes (added 2026-10-04)
+
+### Final v1 feature set (23 features)
+
+| Prefix | Count | Names |
+|---|---|---|
+| `px_` | 8 | `ret_1d`, `ret_5d`, `ret_20d`, `vol_20d`, `vol_60d`, `rsi_14`, `mom_60d`, `vol_ratio_5_20` |
+| `cs_` | 2 | `sector_rank_20d`, `market_rank_20d` |
+| `mkt_` | 2 | `beta_60d`, `corr_60d` |
+| `mc_` | 6 | `fedfunds`, `dgs10`, `dgs2`, `cpi_yoy`, `payems_yoy`, `unrate` |
+| `fd_` | 5 | `net_margin`, `roe`, `capex_intensity`, `rev_growth_yoy`, `employees` |
+
+Columns in `fct_features_daily` (or `features_daily.parquet`) are
+these 23 features plus 3 metadata (`ticker`, `trade_date`, `sector`)
+and 5 label/context columns (`adj_close`, `log_return`,
+`next_log_return`, `next_return_positive`, `is_benchmark`). Total:
+31 columns, 94,528 rows (32 tickers × ~2,954 trade dates).
+
+### Feature column names are functions of settings
+
+An early version of `price_features.py` exposed a module-level
+constant `PRICE_FEATURE_COLUMNS = ("px_ret_5d", ...)`. This broke as
+soon as tests overrode window lengths (settings with
+`window_short=3` produced `px_ret_3d`, not `px_ret_5d`). Feature
+names are now produced by `price_feature_columns(settings)`,
+`macro_feature_columns(settings)`, etc. The assembler calls these to
+determine the canonical column order.
+
+### Helper columns must not leak
+
+`add_market_context_features` originally joined the benchmark's
+`log_return` as `benchmark_log_return` and left it in the output.
+That is an internal helper for beta/correlation, not a feature. The
+builder now drops it before returning, and the assembler applies a
+defensive filter that removes any column not in
+`(metadata | known features | preserved labels)`. A regression test
+asserts no extra columns appear.
+
+### Float-precision guards
+
+Two invariants were violated by float arithmetic in practice:
+
+- `corr` computed via `rolling().corr()` occasionally returned
+  `1 + 2e-16`. Clipped to `[-1, 1]` in the builder.
+- Ratios with tiny denominators explode. `fd_net_margin` and
+  `fd_roe` are clipped to `[-5, 5]`; `fd_capex_intensity` to
+  `[0, 2]`; `fd_rev_growth_yoy` to `[-1, 5]`. These are bounds, not
+  invariants; the caller can choose to treat clipped values as NaN
+  if the bound feels too generous.
+
+### Anti-leakage testing pattern
+
+Every feature family has the same test shape:
+
+1. Compute features on clean input, take value at time T.
+2. Poison all rows after T (replace with garbage, e.g. random large
+   numbers or fully shuffled values).
+3. Recompute features.
+4. Assert the value at T is unchanged.
+
+If a feature secretly reads future data — a centred rolling window,
+a reversed shift, a mis-aligned join — this test fails. It is the
+mechanical equivalent of "no look-ahead" for the whole layer.
+
+### Where features sit in the DAG
+
+The pipeline is now::
+
+    raw → dbt staging/intermediate/marts → features (Python) → backtest
+
+`fct_features_daily` (dbt) reads the feature Parquet back into the
+warehouse so the backtest (M5) can consume it as a normal table.
+Features are not in the dbt DAG; they are an artifact of the Python
+layer that the dbt layer happens to read. This is the trade-off
+recorded in the Decision section above.

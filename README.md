@@ -264,19 +264,30 @@ identity from the file path. The content hash is unaffected.
 - Failures are actionable: the report identifies the layer, the row,
   the column, and the invariant that was violated.
 
-### 6. Features (`features/`) — planned M4
-- Point-in-time feature builders: a feature for date `t` only uses
-  data available strictly before `t`.
-- **Price features:** lagged returns, rolling volatility, RSI,
-  momentum, volume ratios, cross-sectional ranks.
-- **Macro features:** rate regime, inflation YoY, payroll growth,
-  curve steepness — joined as-of each trade date using the correct
-  vintage.
-- **Fundamental features:** employee growth, margin trend, capex
-  intensity — joined as-of each trade date using the correct filing
-  date.
-- Anti-leakage tests: shuffle future rows; assert features for date
-  `t` do not change.
+### 6. Features (`features/`)
+- **Point-in-time feature builders** as pure functions: input
+  DataFrame in, output DataFrame out, no IO. Assembled by
+  `features/assembler.py`, written to versioned Parquet at
+  `data/features/v1/features_daily.parquet`.
+- **23 features across 5 families** (v1):
+  - `px_*` (8) — lagged returns 1/5/20d, volatility 20/60d, RSI(14),
+    momentum 60d, volume ratio 5/20.
+  - `cs_*` (2) — cross-sectional percentile ranks within sector and
+    within the universe, at 20d horizon.
+  - `mkt_*` (2) — 60d beta and correlation vs SPY.
+  - `mc_*` (6) — Fed funds, DGS10, DGS2, CPI YoY, payrolls YoY,
+    unemployment rate. Joined from vintage-aware
+    `marts.fct_macro_daily`.
+  - `fd_*` (5) — net margin, ROE, capex intensity, revenue YoY,
+    employees. Joined from filing-date PIT
+    `intermediate.int_fundamentals_pit`, with ASC 606 revenue tags
+    coalesced.
+- **Anti-leakage tests** for every family: poison future rows with
+  garbage, recompute, assert features at `t` unchanged. See
+  `tests/unit/test_*_features.py`.
+- **Versioned output.** Bumping `FEATURE_VERSION` in
+  `features/config.py` creates a new directory; old versions stay.
+  See ADR 0012.
 
 ### 7. Backtest (`backtest/`) — planned M5
 - Walk-forward evaluation with expanding or rolling windows.
@@ -400,6 +411,7 @@ make dbt-build      # run dbt models and tests
 make quality        # run the data quality gate (8 layers)
 make ci             # run the full CI suite locally
 make setup-dev      # one-command resumable environment setup
+make features       # build the feature table (M4)
 make backtest       # run the walk-forward backtest
 make app            # start the Streamlit dashboard
 make down           # stop services
@@ -471,7 +483,7 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 │   │                       # fct_prices_daily, fct_macro_daily
 │   ├── tests/              # singular tests (PIT, OHLC, benchmark)
 │   └── macros/             # generate_schema_name, freshness
-├── features/           # point-in-time feature builders + anti-leakage
+├── features/           # PIT feature builders (M4) + versioned Parquet
 ├── backtest/           # walk-forward, metrics, staking
 ├── models/             # train, calibrate, registry
 ├── orchestration/      # Prefect flows
@@ -497,9 +509,9 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 
 | Tier | Count | Scope | Marker |
 |---|---|---|---|
-| Unit (pytest) | ~250 | Pure functions, no external services (default) | none |
+| Unit (pytest) | ~290 | Pure functions, no external services (default) | none |
 | Integration (pytest) | 10 | Needs network or a warehouse | `@pytest.mark.integration` |
-| dbt tests (schema + singular) | ~95 | Column-level + SQL checks | — |
+| dbt tests (schema + singular) | ~99 | Column-level + SQL checks | — |
 | Slow | — | Long-running backtests | `@pytest.mark.slow` |
 
 Key tests:
@@ -651,7 +663,7 @@ prediction.
 - [x] **M3.8:** Fundamental warehouse (staging, filing-date PIT join)
 - [x] **M3.9:** Quality gate extension for macro + fundamental layers
 - [x] **M3.9.5:** Daily-series optimization (latest-mode expansion)
-- [ ] **M4:** Point-in-time features (prices + macro + fundamental), anti-leakage tests
+- [x] **M4:** Point-in-time features (prices + macro + fundamental), anti-leakage tests
 - [ ] **M4.5:** ADR 0013 — risk framework (entry, staking, limits; user-defined formulas)
 - [ ] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration
 - [ ] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions)
