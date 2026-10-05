@@ -1,0 +1,22 @@
+{
+  "run_id": "20260101_120000_logistic_C0.1_hl252",
+  "started_at": "2026-01-01T12:00:00+00:00",
+  "finished_at": "2026-01-01T12:00:45+00:00",
+  "elapsed_sec": 45.0,
+  "backtest_version": "v1",
+  "risk_version": "v1",
+  "backtest": {
+    "train_window_months": 36,
+    "test_window_months": 3,
+    "step_months": 3,
+    "model_type": "logistic",
+    "model_C": 0.1,
+    "seed": 42
+  },
+  "risk": {
+    "kelly_fraction": 0.25,
+    "kelly_cap": 0.05,
+    "round_trip_cost_bp": 5.0
+  },
+  "_demo": true
+}

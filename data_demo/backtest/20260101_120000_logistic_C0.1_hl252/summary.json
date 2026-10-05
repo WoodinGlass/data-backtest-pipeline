@@ -1,0 +1,42 @@
+{
+  "run_id": "20260101_120000_logistic_C0.1_hl252",
+  "started_at": "2026-01-01T12:00:00+00:00",
+  "finished_at": "2026-01-01T12:00:45+00:00",
+  "elapsed_sec": 45.0,
+  "n_folds": 8,
+  "models": {
+    "main": {
+      "aggregate": {
+        "n_folds": 8
+      },
+      "pooled": {
+        "n_obs": 600,
+        "n_days": 200,
+        "classification": {
+          "log_loss": 0.6925,
+          "brier": 0.249,
+          "auc": 0.515,
+          "hit_rate": 0.506
+        },
+        "trading": {
+          "sharpe": 0.38,
+          "cagr": 0.042,
+          "max_drawdown": 0.098
+        },
+        "sharpe_ci": {
+          "lower": -0.35,
+          "upper": 1.12
+        }
+      },
+      "deflated": {
+        "sharpe_annualized": 0.38,
+        "deflated_sharpe": 0.52,
+        "n_trials": 4
+      },
+      "yearly_sharpe": {
+        "2024": 0.42
+      }
+    }
+  },
+  "_demo": true
+}

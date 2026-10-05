@@ -27,6 +27,33 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CACHE_TTL_SECONDS = 600
 
 
+def _resolve_roots() -> tuple[Path, Path, Path, bool]:
+    """Return (warehouse, features, backtest_dir, is_demo).
+
+    Prefers data/ if it exists; falls back to data_demo/. The two
+    layouts differ:
+      - real data/:    warehouse.duckdb (file), features/v1/features_daily.parquet
+      - demo data_demo/: warehouse_demo/ (dir of per-mart Parquet),
+                          features_demo.parquet
+    See ADR 0020 section 2.
+    """
+    real = REPO_ROOT / "data"
+    demo = REPO_ROOT / "data_demo"
+    if real.exists():
+        return (
+            real / "warehouse.duckdb",
+            real / "features" / "v1" / "features_daily.parquet",
+            real / "backtest",
+            False,
+        )
+    return (
+        demo / "warehouse_demo",
+        demo / "features_demo.parquet",
+        demo / "backtest",
+        True,
+    )
+
+
 # ---------------------------------------------------------------------
 # Cached loaders
 # ---------------------------------------------------------------------
@@ -35,15 +62,21 @@ CACHE_TTL_SECONDS = 600
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner="Building monitoring report...")
 def get_report(reference_date: str | None = None) -> dict[str, Any]:
     """Build the monitoring report (cached)."""
-    settings = MonitoringSettings(reference_date=reference_date)
+    warehouse, features, backtest_dir, _is_demo = _resolve_roots()
+    settings = MonitoringSettings(
+        reference_date=reference_date,
+        warehouse_path=str(warehouse),
+        features_path=str(features),
+        backtest_dir=str(backtest_dir),
+    )
     return build_report(settings=settings, repo_root=REPO_ROOT)
 
 
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner="Loading backtest run...")
 def get_latest_run_dir() -> str | None:
     """Return the latest backtest run directory, or None."""
-    settings = MonitoringSettings()
-    run_dir = load_latest_run(REPO_ROOT / settings.backtest_dir)
+    _w, _f, backtest_dir, _is_demo = _resolve_roots()
+    run_dir = load_latest_run(backtest_dir)
     return str(run_dir) if run_dir else None
 
 
@@ -263,6 +296,16 @@ def render_about_tab() -> None:
 # ---------------------------------------------------------------------
 
 
+def _render_demo_banner() -> None:
+    """Show a loud banner when running on the committed demo data."""
+    _w, _f, _b, is_demo = _resolve_roots()
+    if is_demo:
+        st.warning(
+            "**DEMO DATA** — synthetic market, not a real backtest. "
+            "See `data_demo/README.md` for details."
+        )
+
+
 def main() -> None:
     """Entrypoint: 4 tabs + refresh button in the sidebar."""
     st.set_page_config(
@@ -275,6 +318,8 @@ def main() -> None:
         "Daily US equity direction - ingestion, warehouse, features, "
         "risk, backtest, tracking, orchestration."
     )
+
+    _render_demo_banner()
 
     with st.sidebar:
         st.header("Controls")

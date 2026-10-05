@@ -42,6 +42,7 @@ PR that changes the code.
 | [0017](0017-docker.md) | Docker and one-command reproducibility | Accepted | Deployment |
 | [0018](0018-ci-contract.md) | CI contract and merge blocking | Accepted | CI/CD |
 | [0019](0019-monitoring-dashboard.md) | Monitoring and Streamlit dashboard | Accepted | Monitoring |
+| [0020](0020-deployment-and-summary.md) | Deployment target and research summary | Accepted | Deployment |
 
 ## Grouping by theme
 

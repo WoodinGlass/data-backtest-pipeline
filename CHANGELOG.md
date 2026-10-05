@@ -41,6 +41,60 @@ minor version (`0.<M>.0`).
 - Makefile: `monitor`, `monitor-json` targets.
 - 79 unit tests in `tests/unit/test_monitoring_*.py`.
 
+### Added (M12 - Deployment and research summary)
+
+- **ADR 0020** - deployment target and research summary design
+  (10 decisions: Streamlit Community Cloud, demo-mode fallback to
+  committed sample data, synthetic sample under 500 KB, generated
+  by script, prominent banner, paper-like Markdown summary,
+  expectation-first results protocol, no CI deploy check, VPS
+  alternative documented only, deploy guide in runbook).
+- `scripts/make_demo_data.py` - deterministic generator for
+  `data_demo/`. Produces 4 marts as Parquet, a features table,
+  a full synthetic backtest run, a monitoring report, and a
+  README. Seeded; re-runnable; output under ~350 KB.
+- `data_demo/` - committed synthetic sample data used by the
+  Streamlit Cloud deployment when the real `data/` directory is
+  absent.
+- `app/streamlit_app.py` - `_resolve_roots()` picks `data/` when
+  present, else `data_demo/`. `_render_demo_banner()` shows a
+  loud DEMO warning at the top of every tab when running on
+  sample data.
+- `.streamlit/config.toml` - theme + server + logger settings.
+- `.streamlit/secrets.toml.example` - template; the real file is
+  git-ignored.
+- `requirements.txt` - minimal dependency set for the Streamlit
+  Cloud build. Includes the local package via `-e .`.
+- `docs/research_summary.md` - paper-like summary: abstract,
+  problem, data, features, model, risk, methodology, results
+  (expectation-first, observed placeholder), limitations,
+  conclusion, reproduction, references.
+- `docs/runbook.md` - new "Streamlit Cloud deployment" section
+  covering one-time setup, verification checklist, redeploy,
+  demo-data regeneration, cold starts, and a failure-triage table.
+
+### Fixed (M12 discovered)
+
+- `monitoring/report.py::load_marts` now recognizes a warehouse
+  that is a *directory* of per-mart Parquet files (used by demo
+  mode) in addition to a DuckDB file. `wh.is_dir()` is checked
+  first; if it matches, each mart is read from
+  `<wh>/<mart_name>.parquet`.
+- `scripts/make_demo_data.py` - `next_return_positive` uses
+  pandas nullable boolean to avoid a FutureWarning from setting
+  `None` into a bool column.
+
+### Notes (M12)
+
+- The Streamlit Cloud deployment renders **synthetic** demo data,
+  clearly labeled. The full pipeline has not been run end-to-end
+  in this environment; the `docs/research_summary.md` Results
+  section states expectations first and leaves observation as an
+  explicit placeholder to be filled after a local run.
+- Streamlit Cloud deploy is a UI action, not a CI step. Verified
+  manually per the runbook checklist.
+- `docs/adr/` count is now 0001-0020.
+
 ### Notes (M10)
 
 - **Colab cannot run the Streamlit server.** Dashboard verification is

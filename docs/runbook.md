@@ -333,3 +333,86 @@ anything. If it shows a report older than expected, click
   automatic one.
 - **Does not fix data.** A stale mart must be fixed at the ingestion
   layer; monitoring only reports the symptom.
+
+
+---
+
+## Streamlit Cloud deployment (M12)
+
+The public dashboard lives on Streamlit Community Cloud. It renders
+from `data_demo/` (synthetic sample data) because the real `data/`
+directory is git-ignored. See `docs/adr/0020-deployment-and-summary.md`.
+
+### One-time setup
+
+1. Go to <https://share.streamlit.io> and sign in with GitHub.
+2. Click **Create app** → **Deploy a public app from GitHub**.
+3. Fill in:
+   - **Repository:** `WoodinGlass/data-backtest-pipeline`
+   - **Branch:** `main`
+   - **Main file path:** `app/streamlit_app.py`
+   - **App URL:** (Streamlit assigns one; you can customize the slug)
+4. Click **Deploy**. First build takes ~2–3 minutes.
+
+Streamlit Cloud reads `requirements.txt` at the repo root. That file
+lists the minimal dashboard dependencies (streamlit, pandas, duckdb,
+pyarrow, scikit-learn, etc.) plus the local package via `-e .`.
+
+### Verification checklist (after any deploy)
+
+Open the app URL and confirm:
+
+- [ ] A yellow **DEMO DATA** banner appears at the top.
+- [ ] **Health** tab shows 4 marts with PASS/WARN/FAIL statuses.
+- [ ] **Backtest** tab shows the pooled metrics table and two plots.
+- [ ] **Drift** tab shows a PSI bar chart and a KS p-value bar chart.
+- [ ] **About** tab shows the repo link and ADR list.
+- [ ] "Refresh (clear cache)" button in the sidebar works.
+
+If the demo banner is **missing**, `data/` exists in the environment —
+that should not happen on Streamlit Cloud, only on a local machine
+with real data. Check the logs for `_resolve_roots`.
+
+### Redeploy
+
+Streamlit Cloud redeploys automatically on every push to `main`
+(webhook-driven). To force a rebuild without a commit:
+
+- App page → **⋮ menu** → **Reboot app**.
+
+### Regenerating demo data
+
+If the real schema changes, regenerate `data_demo/` and commit:
+
+```bash
+python scripts/make_demo_data.py
+git add data_demo/
+git commit -m "chore(demo): regenerate sample data"
+git push
+```
+
+The script is deterministic (seeded). Deleting `data_demo/` and
+re-running produces identical files.
+
+### Cold starts
+
+Streamlit Community Cloud spins apps down after ~7 days of
+inactivity. The first request after that takes ~30 seconds. This is
+normal; do not file a bug.
+
+### VPS alternative (not built)
+
+For a self-hosted option, wrap `streamlit run app/streamlit_app.py`
+in a Docker container built from the M8 `Dockerfile`, and reverse-
+proxy it with Caddy or nginx for TLS. Not implemented in M12; the
+Streamlit Cloud deploy is sufficient for a portfolio project.
+
+### Debugging a failed deploy
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Build fails at `pip install -r requirements.txt` | New dep missing from requirements.txt | Add it, commit, push |
+| App loads but shows "ModuleNotFoundError: monitoring" | `-e .` failed silently | Check the build log; ensure `pyproject.toml` is present |
+| Demo banner missing | `data/` accidentally committed | `git rm -r --cached data` |
+| All tabs show "no data" | `data_demo/` not committed | `git status data_demo/`; commit if missing |
+| App hangs on first request | Cold start (~30s) | Wait; reload |

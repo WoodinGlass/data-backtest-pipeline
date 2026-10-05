@@ -58,6 +58,22 @@ def load_marts(
         logger.warning("warehouse not found: %s", wh)
         return out
 
+    # If warehouse is a directory of Parquet marts (demo mode), read
+    # from there. Otherwise treat as a DuckDB file.
+    if wh.is_dir():
+        for mart_name in settings.marts:
+            fp = wh / f"{mart_name}.parquet"
+            if fp.exists():
+                df = pd.read_parquet(fp)
+                if "trade_date" in df.columns:
+                    df["trade_date"] = pd.to_datetime(
+                        df["trade_date"],
+                        errors="coerce",
+                    )
+                out[mart_name] = df
+                logger.info("loaded %s from parquet: %d rows", mart_name, len(df))
+        return out
+
     import duckdb
 
     con = duckdb.connect(str(wh), read_only=True)

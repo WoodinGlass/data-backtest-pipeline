@@ -1,0 +1,160 @@
+{
+  "generated_at": "2026-10-05T02:15:20+00:00",
+  "version": "v1",
+  "reference_date": "2024-10-04",
+  "repo_root": "(demo)",
+  "freshness": {
+    "reference_date": "2024-10-04",
+    "marts": [
+      {
+        "mart": "fct_prices_daily",
+        "status": "PASS",
+        "rows": 600,
+        "latest_date": "2024-10-04",
+        "age_days": 1,
+        "warn_days": 3,
+        "fail_days": 7,
+        "reason": "demo"
+      },
+      {
+        "mart": "fct_returns_daily",
+        "status": "PASS",
+        "rows": 594,
+        "latest_date": "2024-10-04",
+        "age_days": 1,
+        "warn_days": 3,
+        "fail_days": 7,
+        "reason": "demo"
+      },
+      {
+        "mart": "fct_macro_daily",
+        "status": "PASS",
+        "rows": 600,
+        "latest_date": "2024-10-04",
+        "age_days": 1,
+        "warn_days": 45,
+        "fail_days": 90,
+        "reason": "demo"
+      },
+      {
+        "mart": "fct_fundamentals_daily",
+        "status": "PASS",
+        "rows": 600,
+        "latest_date": "2024-10-04",
+        "age_days": 1,
+        "warn_days": 120,
+        "fail_days": 180,
+        "reason": "demo"
+      }
+    ],
+    "overall": "PASS"
+  },
+  "drift": {
+    "n_features": 6,
+    "flagged_count": 1,
+    "overall": "WARN",
+    "features": [
+      {
+        "feature": "px_return_1d",
+        "status": "PASS",
+        "psi": 0.04,
+        "ks_pvalue": 0.62,
+        "n_ref": 30,
+        "n_cur": 30,
+        "reason": "psi=0.04, ks_p=0.62"
+      },
+      {
+        "feature": "px_vol_20d",
+        "status": "WARN",
+        "psi": 0.14,
+        "ks_pvalue": 0.03,
+        "n_ref": 30,
+        "n_cur": 30,
+        "reason": "psi=0.14, ks_p=0.03"
+      },
+      {
+        "feature": "px_momentum_60d",
+        "status": "PASS",
+        "psi": 0.03,
+        "ks_pvalue": 0.71,
+        "n_ref": 30,
+        "n_cur": 30,
+        "reason": "psi=0.03, ks_p=0.71"
+      },
+      {
+        "feature": "cs_percentile_rank_universe_20d",
+        "status": "PASS",
+        "psi": 0.02,
+        "ks_pvalue": 0.88,
+        "n_ref": 30,
+        "n_cur": 30,
+        "reason": "psi=0.02, ks_p=0.88"
+      },
+      {
+        "feature": "mkt_beta_60d",
+        "status": "PASS",
+        "psi": 0.05,
+        "ks_pvalue": 0.44,
+        "n_ref": 30,
+        "n_cur": 30,
+        "reason": "psi=0.05, ks_p=0.44"
+      },
+      {
+        "feature": "mc_fedfunds",
+        "status": "PASS",
+        "psi": 0.0,
+        "ks_pvalue": 1.0,
+        "n_ref": 30,
+        "n_cur": 30,
+        "reason": "psi=0.00, ks_p=1.00"
+      }
+    ]
+  },
+  "performance": {
+    "run_dir": "data_demo/backtest/20260101_120000_logistic_C0.1_hl252",
+    "metrics_path": "metrics.parquet",
+    "model": "main",
+    "window_folds": 4,
+    "n_folds_total": 8,
+    "n_folds_used": 4,
+    "fold_range": [
+      4,
+      7
+    ],
+    "metrics": {
+      "cls_log_loss": {
+        "value": 0.6925,
+        "warn": 0.72,
+        "fail": 0.75,
+        "direction": "lower_is_better",
+        "severity": "PASS"
+      },
+      "cls_brier": {
+        "value": 0.249,
+        "warn": 0.26,
+        "fail": 0.28,
+        "direction": "lower_is_better",
+        "severity": "PASS"
+      },
+      "cls_auc": {
+        "value": 0.515,
+        "warn": 0.5,
+        "fail": 0.48,
+        "direction": "higher_is_better",
+        "severity": "PASS"
+      },
+      "trd_sharpe": {
+        "value": 0.38,
+        "warn": 0.0,
+        "fail": -0.5,
+        "direction": "higher_is_better",
+        "severity": "PASS"
+      }
+    },
+    "overall": "PASS",
+    "reason": "cls_auc=0.515, cls_log_loss=0.6925, trd_sharpe=0.38"
+  },
+  "errors": [],
+  "overall": "WARN",
+  "_demo": true
+}

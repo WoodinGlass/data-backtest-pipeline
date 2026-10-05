@@ -599,7 +599,7 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 │   ├── unit/           # pure, no external services
 │   ├── integration/    # needs network or a warehouse
 │   └── fixtures/       # committed tiny Parquet fixture for CI
-├── docs/               # ADR 0001–0019, data dictionary, runbook
+├── docs/               # ADR 0001–0020, data dictionary, runbook
 ├── .github/workflows/  # CI: lint-and-test + dbt-build + quality
 ├── Dockerfile  docker-compose.yml  Makefile
 └── pyproject.toml  .pre-commit-config.yaml
@@ -1250,6 +1250,55 @@ directly. One source of truth for each metric.
 - **Drift with insufficient data = PASS with reason.** We cannot
   measure drift from 30 days; flagging it as failure would be noise.
 
+
+---
+
+## M12 - Deployment and research summary in one page
+
+Locked contract: **ADR 0020**. The project ships two public
+artifacts: a Streamlit Cloud dashboard rendered from **synthetic**
+demo data, and a paper-like summary in `docs/research_summary.md`.
+
+### Public dashboard
+
+Deployed on Streamlit Community Cloud. URL: *(see
+`docs/runbook.md` "Streamlit Cloud deployment" for the current
+link after deploy)*.
+
+The dashboard reads from `data_demo/` when the real `data/` is
+absent. A prominent **DEMO DATA** banner appears on every tab.
+
+```bash
+make app          # local
+python scripts/make_demo_data.py   # regenerate sample data
+```
+
+### Research summary
+
+`docs/research_summary.md` follows a research-paper structure:
+
+- Abstract, problem statement, data, features, model, risk,
+  methodology, results, limitations, conclusion, reproduction,
+  references.
+- The **Results** section states **expected outcomes first**
+  (AUC 0.50-0.53, Sharpe near zero after cost, likely
+  underperformance vs SPY) and leaves **observed outcomes** as an
+  explicit placeholder to be filled after a local run. Writing the
+  expectation first means it cannot be retrofitted to whatever the
+  numbers end up being.
+
+### What M12 does not do
+
+- Does **not** run the full pipeline in the cloud. yfinance +
+  FRED + ALFRED + SEC ingest takes 30-60 minutes and depends on
+  external APIs. The Cloud host is for presentation, not compute.
+- Does **not** include real market data in the repo. All numbers
+  on the public dashboard are synthetic and labeled as such.
+- Does **not** provide a VPS deployment. Documented as an
+  alternative in `docs/runbook.md` but not built.
+- Does **not** verify the deploy in CI. The Streamlit Cloud
+  deploy is a UI action; verification is a manual checklist.
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -1291,7 +1340,7 @@ directly. One source of truth for each metric.
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0019)
+- `docs/adr/`: architecture decision records (0001–0020)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -1311,7 +1360,7 @@ directly. One source of truth for each metric.
 
 ## Roadmap
 
-Progress: **18 / 19 milestones selesai (~95%)**. Fokus berikutnya: **M12 (Deploy + research summary)**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
+Progress: **19 / 19 milestones selesai**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
 
 ### ✅ Selesai
 
@@ -1336,7 +1385,7 @@ Progress: **18 / 19 milestones selesai (~95%)**. Fokus berikutnya: **M12 (Deploy
 - [x] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking (ADR 0018)
 - [x] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard (ADR 0019)
 - [x] **M11:** Documentation: README, data dictionary, runbook, ADRs
-- [ ] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary
+- [x] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary (ADR 0020)
 
 ---
 
