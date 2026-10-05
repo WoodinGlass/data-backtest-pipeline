@@ -1,4 +1,4 @@
-.PHONY: help install install-all lint format test test-int test-all dbt-build ingest ingest-macro ingest-sec quality quality-json features features-info backtest app orchestrate clean ci ci-docker ci-full up down logs shell run pipeline docker-build prefect-up prefect-down
+.PHONY: help install install-all lint format test test-int test-all dbt-build ingest ingest-macro ingest-sec quality quality-json features features-info backtest app orchestrate clean ci ci-docker ci-full up down logs shell run pipeline docker-build prefect-up prefect-down monitor monitor-json
 
 
 help:  ## Show this help
@@ -130,6 +130,16 @@ orchestrate:  ## Run a flow inside the worker (usage: make orchestrate FLOW=dail
 	docker compose exec worker python -m orchestration.cli run $(FLOW) $(if $(ARG),--arg $(ARG),)
 
 # --- End Docker -----------------------------------------------------------
+
+# --- Monitoring (M10) -------------------------------------------------------
+
+monitor:  ## Run the monitoring report (freshness + drift + performance)
+	python -m monitoring.cli run
+
+monitor-json:  ## Same, writing JSON to reports/monitoring.json
+	python -m monitoring.cli run --json reports/monitoring.json
+
+# --- End Monitoring ---------------------------------------------------------
 
 clean:  ## Remove build artifacts and caches
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov .coverage

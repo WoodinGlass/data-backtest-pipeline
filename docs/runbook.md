@@ -259,3 +259,77 @@ branch protection was misconfigured — recheck step 3.
 - `make up` end-to-end — user action, acceptance test in the
   Docker section above.
 - Deployment — out of scope until M12.
+
+
+---
+
+## Monitoring (M10)
+
+### Daily / weekly review
+
+```bash
+make monitor          # print to stdout
+make monitor-json     # also write reports/monitoring.json
+```
+
+Exit code is 0 unless `--fail-on-fail` is set.
+
+### The three signals
+
+| Signal | PASS means | WARN means | FAIL means |
+|---|---|---|---|
+| Freshness | newest row within warn window | between warn and fail | older than fail, or mart missing/empty |
+| Drift | PSI < warn and KS p > warn | either metric in warn zone | PSI >= fail or KS p <= fail |
+| Performance | rolling metric above threshold | metric in warn zone | metric crossed fail threshold |
+
+### Common failures
+
+**1. Freshness FAIL on `fct_prices_daily`**
+
+**Cause.** No `ingest_prices` run in the last 7 days.
+
+**Fix.** `make ingest`, then `make dbt-build`, then `make monitor`
+again.
+
+**2. Drift FAIL on one feature**
+
+**Cause.** A regime change, or a data pipeline bug upstream.
+
+**Checklist:**
+
+- Open the Drift tab in the dashboard. Which feature?
+- `python -m monitoring.cli run --json /tmp/m.json`, inspect
+  `/tmp/m.json`. The `reason` field names PSI and KS p-value.
+- Compare: does the feature also show up as suspicious in the
+  Backtest tab (rolling AUC drop)? If yes, the drift is real; if no,
+  it may be a measurement artifact from a small window.
+- If it persists for 2+ weeks, re-run feature build and check the
+  upstream mart.
+
+**3. Performance FAIL**
+
+**Cause.** Rolling metric crossed the fail threshold.
+
+**Fix.** Look at the Backtest tab. If the last 4 folds were all bad,
+the model is genuinely degraded — a future M12 decision. If only one
+fold dragged the mean down, wait a week and re-check.
+
+### Dashboard
+
+```bash
+make app
+```
+
+Requires Streamlit (`[app]` extra). The dashboard reads from
+`monitoring.*` and the latest backtest run dir. It never writes
+anything. If it shows a report older than expected, click
+"Refresh (clear cache)" in the sidebar.
+
+### What monitoring does NOT do
+
+- **Does not alert.** `make monitor` is pull-based. Failure alerting
+  is the M7 webhook, which fires on Prefect flow failure.
+- **Does not retrain.** A degraded model is a human decision, not an
+  automatic one.
+- **Does not fix data.** A stale mart must be fixed at the ingestion
+  layer; monitoring only reports the symptom.

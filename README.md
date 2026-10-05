@@ -1145,6 +1145,111 @@ to force clarity, not so many that the prompts get deleted.
   the compose stack. Building the image is the contract; running
   the pipeline in Docker is a user action.
 
+
+---
+
+## M10 — Monitoring + Streamlit in one page
+
+Locked contract: **ADR 0019**. Three health signals (freshness, drift,
+performance), one JSON report, one read-only dashboard. No alerting
+(M7 webhook already covers failure notification), no retraining, no
+persistent metrics store.
+
+### Three signals
+
+| Signal | Question | Frequency |
+|---|---|---|
+| **Freshness** | How old is the newest row per mart? | daily |
+| **Drift** | Has feature distribution shifted? | weekly |
+| **Performance** | What are the recent rolling metrics? | weekly |
+
+### Freshness
+
+Per-mart `MAX(trade_date)` vs threshold (calendar days):
+
+| Mart | WARN | FAIL |
+|---|---|---|
+| `fct_prices_daily` | 3 | 7 |
+| `fct_returns_daily` | 3 | 7 |
+| `fct_macro_daily` | 45 | 90 |
+| `fct_fundamentals_daily` | 120 | 180 |
+
+### Drift
+
+Two numbers per numeric feature: **PSI** (bucketed distribution
+distance) and **KS** (Kolmogorov-Smirnov p-value). Reference window =
+first 60 trading days of the feature table; current window = last 60.
+A feature is flagged when PSI ≥ 0.25 **or** KS p-value ≤ 0.01.
+
+### Performance
+
+Rolling mean over the last `perf_window_folds` (default 4) of the M5
+backtest metrics: log loss, Brier, AUC, Sharpe. Thresholds are loose
+by design — monitoring flags obvious degradation, not normal noise.
+
+### One report, one command
+
+```bash
+make monitor           # print text summary
+make monitor-json      # also write reports/monitoring.json
+python -m monitoring.cli info     # print thresholds
+python -m monitoring.cli schema   # print report schema
+```
+
+Exit code is 0 for PASS/WARN, 1 for FAIL if `--fail-on-fail` is set.
+
+### Streamlit dashboard
+
+```bash
+make app               # or: streamlit run app/streamlit_app.py
+```
+
+Four tabs:
+
+| Tab | Content |
+|---|---|
+| **Health** | Overall status, freshness table, latest run |
+| **Backtest** | Pooled metrics, deflated Sharpe, equity + calibration plots |
+| **Drift** | PSI + KS per feature, two bar charts |
+| **About** | Repo links, ADR list, runtime info |
+
+The dashboard reads from `monitoring.*` — it never parses Parquet
+directly. One source of truth for each metric.
+
+### Modules
+
+- `monitoring/config.py` — `MonitoringSettings` (`DBP_MON_*`)
+- `monitoring/freshness.py` — pure, one mart at a time
+- `monitoring/drift.py` — pure, PSI + KS
+- `monitoring/performance.py` — pure, rolling window
+- `monitoring/report.py` — the only IO edge
+- `monitoring/cli.py` — `dbp-monitor run | schema | info`
+- `app/streamlit_app.py` — single-file dashboard
+
+### Test coverage
+
+| File | Tests |
+|---|---|
+| `test_monitoring_config.py` | 21 |
+| `test_monitoring_freshness.py` | 17 |
+| `test_monitoring_drift.py` | 22 |
+| `test_monitoring_performance.py` | 19 |
+| **Total** | **79** |
+
+### Design notes
+
+- **Pure functions everywhere except `report.py`.** All three checkers
+  are testable without a warehouse; `report.py` is the only place that
+  reads or writes files.
+- **Failure isolation.** Each section is wrapped in try/except; a
+  broken section records an error in `report["errors"]` and does not
+  abort the others.
+- **Missing backtest run = FAIL, not skip.** A monitored pipeline that
+  has never produced a metrics file is a real problem. Same for
+  missing warehouse — freshness goes FAIL.
+- **Drift with insufficient data = PASS with reason.** We cannot
+  measure drift from 30 days; flagging it as failure would be noise.
+
 ## Limitations
 
 - Backtests rely on historical data and cannot capture regime
@@ -1186,7 +1291,7 @@ to force clarity, not so many that the prompts get deleted.
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0018)
+- `docs/adr/`: architecture decision records (0001–0019)
 - `docs/data_dictionary.md`: tables, columns, meanings
 - `docs/runbook.md`: three most common failures
 - `CHANGELOG.md`: notable changes
@@ -1206,7 +1311,7 @@ to force clarity, not so many that the prompts get deleted.
 
 ## Roadmap
 
-Progress: **16 / 19 milestones selesai (~84%)**. Fokus berikutnya: **M10 (Monitoring + Streamlit)**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
+Progress: **17 / 19 milestones selesai (~89%)**. Fokus berikutnya: **M10 (Monitoring + Streamlit)**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
 
 ### ✅ Selesai
 
@@ -1229,7 +1334,7 @@ Progress: **16 / 19 milestones selesai (~84%)**. Fokus berikutnya: **M10 (Monito
 - [x] **M7:** Prefect orchestration with failure alerts (ADR 0016)
 - [x] **M8:** Docker + `make up` for one-command reproducibility (ADR 0017)
 - [x] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking (ADR 0018)
-- [ ] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard
+- [x] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard (ADR 0019)
 - [ ] **M11:** Documentation: README, data dictionary, runbook, ADRs
 - [ ] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary
 

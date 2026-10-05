@@ -130,6 +130,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pyproject.toml`: coverage `source` extended to include
   `tracking`, `orchestration`, and `quality`.
 
+### Added (M10 — Monitoring + Streamlit)
+
+- **ADR 0019** — monitoring and dashboard design (10 decisions:
+  three signals only, pure functions + IO at edges, freshness via
+  MAX(trade_date) per mart, drift via PSI + KS, reference = first 60
+  trading days, performance from M5 artifacts, one JSON report,
+  single-file Streamlit dashboard, dashboard reads monitoring.*
+  only, no scheduling).
+- `monitoring/config.py` — `MonitoringSettings` (`DBP_MON_*`),
+  `MartThreshold` with warn<fail validator, `warehouse_schema`.
+- `monitoring/freshness.py` — per-mart `MAX(trade_date)` age vs
+  WARN/FAIL thresholds; pure.
+- `monitoring/drift.py` — PSI (quantile-bucketed distribution
+  distance) + KS (Kolmogorov-Smirnov p-value); flagged when either
+  crosses the fail threshold; pure.
+- `monitoring/performance.py` — rolling window (default 4 folds)
+  over the M5 `metrics.parquet`; thresholds are loose by design;
+  pure except `check_run_dir`.
+- `monitoring/report.py` — assembles the three sections into one
+  JSON report; each section isolated with try/except so a broken
+  section does not abort the others.
+- `monitoring/cli.py` — `dbp-monitor run | schema | info`.
+- `app/streamlit_app.py` — single-file 4-tab dashboard (Health,
+  Backtest, Drift, About); cached 600s; reads monitoring.* only.
+- Makefile: `monitor`, `monitor-json` targets.
+- 79 unit tests in `tests/unit/test_monitoring_*.py`.
+
+### Notes (M10)
+
+- **Colab cannot run the Streamlit server.** Dashboard verification is
+  static: import + mock-call each render function against synthetic
+  reports. End-to-end `make app` is a user action.
+- **No scheduling.** `make monitor` is manual. Wiring monitoring to
+  Prefect is a future ADR.
+- **Missing warehouse or missing backtest run = FAIL, not skip.**
+  Insufficient data for drift (fewer than 2 windows) = PASS with
+  reason, because drift is unmeasurable, not failing.
+- `docs/adr/` count is now 0001–0019.
+
 ### Notes (M9)
 
 - Branch protection (required status checks, dismiss stale reviews,
