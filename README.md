@@ -599,7 +599,7 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 │   ├── unit/           # pure, no external services
 │   ├── integration/    # needs network or a warehouse
 │   └── fixtures/       # committed tiny Parquet fixture for CI
-├── docs/               # ADR 0001–0013, data dictionary, runbook
+├── docs/               # ADR 0001–0019, data dictionary, runbook
 ├── .github/workflows/  # CI: lint-and-test + dbt-build + quality
 ├── Dockerfile  docker-compose.yml  Makefile
 └── pyproject.toml  .pre-commit-config.yaml
@@ -707,7 +707,7 @@ warning first; integrity check → soft fail.
 
 ## Results
 
-> To be filled in after M5 and M12. Claims about performance require
+> To be filled in after M12. Claims about performance require
 > numbers.
 
 | Model | Log loss | Brier | Hit rate | Sharpe | Max DD | ROI vs SPY |
@@ -1311,7 +1311,7 @@ directly. One source of truth for each metric.
 
 ## Roadmap
 
-Progress: **17 / 19 milestones selesai (~89%)**. Fokus berikutnya: **M10 (Monitoring + Streamlit)**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
+Progress: **18 / 19 milestones selesai (~95%)**. Fokus berikutnya: **M12 (Deploy + research summary)**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
 
 ### ✅ Selesai
 
@@ -1335,7 +1335,7 @@ Progress: **17 / 19 milestones selesai (~89%)**. Fokus berikutnya: **M10 (Monito
 - [x] **M8:** Docker + `make up` for one-command reproducibility (ADR 0017)
 - [x] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking (ADR 0018)
 - [x] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard (ADR 0019)
-- [ ] **M11:** Documentation: README, data dictionary, runbook, ADRs
+- [x] **M11:** Documentation: README, data dictionary, runbook, ADRs
 - [ ] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary
 
 ---
