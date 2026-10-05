@@ -2,37 +2,42 @@
 
 > A production-style data and ML pipeline: ingestion → warehouse → features → risk → backtest → monitoring.
 
-![CI](https://github.com/WoodinGlass/data-backtest-pipeline/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/WoodinGlass/data-backtest-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/WoodinGlass/data-backtest-pipeline/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![Streamlit App](https://img.shields.io/badge/Streamlit-demo-FF4B4B?logo=streamlit&logoColor=white)](https://data-backtest-pipeline.streamlit.app/)
+
+**Live demo:** <https://data-backtest-pipeline.streamlit.app/> — *synthetic data, not a real backtest.*
 
 ---
 
 ## Table of Contents
 
 1. [What this is / is not](#what-this-is--is-not)
-2. [Problem](#problem)
-3. [Numbers at a glance](#numbers-at-a-glance)
-4. [Key Design Decisions](#key-design-decisions)
-5. [Architecture](#architecture)
-6. [Tech Stack](#tech-stack)
-7. [Data Contracts](#data-contracts)
-8. [Pipeline Layers](#pipeline-layers)
-9. [Idempotency and Failure Modes](#idempotency-and-failure-modes)
-10. [Universe & Data Source](#universe--data-source)
-11. [Quickstart](#quickstart)
-12. [Configuration](#configuration)
-13. [Project Structure](#project-structure)
-14. [Testing Strategy](#testing-strategy)
-15. [CI/CD](#cicd)
-16. [Bugs caught before production](#bugs-caught-before-production)
-17. [Observability and Monitoring](#observability-and-monitoring)
-18. [Results](#results)
-19. [Limitations](#limitations)
-20. [Documentation](#documentation)
-21. [Contributing](#contributing)
-22. [Roadmap](#roadmap)
-23. [License](#license)
+2. [Development status](#development-status)
+3. [Problem](#problem)
+4. [Numbers at a glance](#numbers-at-a-glance)
+5. [Key Design Decisions](#key-design-decisions)
+6. [Architecture](#architecture)
+7. [Tech Stack](#tech-stack)
+8. [Data Contracts](#data-contracts)
+9. [Pipeline Layers](#pipeline-layers)
+10. [Idempotency and Failure Modes](#idempotency-and-failure-modes)
+11. [Universe & Data Source](#universe--data-source)
+12. [Data source terms](#data-source-terms)
+13. [Quickstart](#quickstart)
+14. [Configuration](#configuration)
+15. [Project Structure](#project-structure)
+16. [Testing Strategy](#testing-strategy)
+17. [CI/CD](#cicd)
+18. [Bugs caught before production](#bugs-caught-before-production)
+19. [Observability and Monitoring](#observability-and-monitoring)
+20. [Results](#results)
+21. [Limitations](#limitations)
+22. [Documentation](#documentation)
+23. [Contributing](#contributing)
+24. [Roadmap](#roadmap)
+25. [License](#license)
 
 ---
 
@@ -50,6 +55,26 @@
 - A real-time or intraday system. Ingestion is **batch** by design.
 - A high-frequency or alpha-generating strategy. Signals in daily equity data are weak and noisy by nature; the point is the pipeline, not the alpha.
 - A general-purpose ML platform. Scope is limited to daily US equities, macro, and fundamentals for one pipeline.
+
+---
+
+## Development status
+
+**Code complete, verified on synthetic data; real-data end-to-end run pending.**
+
+This repository was developed in a Colab-style environment without persistent storage or long-running network access. Every layer is unit-tested and integration-tested, but the full ingest → warehouse → features → backtest sequence has **not** been executed end-to-end on real market data within that environment. It is a one-command run on any local machine with network access (see [Quickstart](#quickstart)).
+
+| Component | Status |
+|---|---|
+| Ingestion, warehouse, quality, features, risk | ✅ Code + unit tests + fixtures |
+| Walk-forward backtest | ✅ Code + unit tests on synthetic data; **real run pending** |
+| MLflow tracking | ✅ Code + end-to-end smoke test against local MLflow |
+| Prefect orchestration | ✅ Code + unit tests; **real schedule run pending** |
+| Docker (`make up`) | ✅ Code + static verification; **local end-to-end acceptance test pending** |
+| Monitoring + Streamlit | ✅ Code + unit tests + demo deployment |
+| Public dashboard | ✅ Deployed with **synthetic** demo data |
+
+The `Results` section below is deliberately explicit about what has been observed and what has not.
 
 ---
 
@@ -97,10 +122,10 @@ Backtests are often unreliable because of hidden data leakage, **survivorship bi
 
 | Tier | Count |
 |---|---|
-| Unit (pytest) | ~390 |
+| Unit (pytest) | ~500 |
 | Integration (pytest) | 10 |
 | dbt schema + singular tests | ~99 |
-| **Total** | **~500** |
+| **Total** | **~600** |
 
 ---
 
@@ -178,7 +203,7 @@ Full rationale is recorded in `docs/adr/`.
    └──────┬───────┘
           ▼
    ┌──────────────┐
-   │  Streamlit   │  dashboard
+   │  Streamlit   │  dashboard (demo: data-backtest-pipeline.streamlit.app)
    └──────────────┘
 
    Orchestration: Prefect (scheduled flows + failure alerts)
@@ -200,7 +225,7 @@ Full rationale is recorded in `docs/adr/`.
 - **Experiment tracking:** MLflow
 - **Containers:** Docker, docker-compose
 - **CI/CD:** GitHub Actions
-- **Dashboard:** Streamlit
+- **Dashboard:** Streamlit (Community Cloud)
 - **Tooling:** ruff, mypy, pytest, pre-commit, Makefile
 
 ---
@@ -366,28 +391,38 @@ identity from the file path. The content hash is unaffected.
 - **104 unit tests** in `tests/unit/test_risk_*.py`, including
   anti-look-ahead checks (prefix stability + poison-future probes).
 
-### 8. Backtest (`backtest/`) — planned M5
-- Walk-forward evaluation with expanding or rolling windows.
-- Baselines: 50/50 naive, momentum, buy-and-hold SPY.
-- Main model: calibrated classifier.
+### 8. Backtest (`backtest/`) — M5
+- Walk-forward evaluation: rolling 36-month train, 3-month test,
+  3-month step. Purge 1 row + 5-day embargo between train and test.
+- Baselines: 50/50 naive, momentum 20d, buy-and-hold SPY,
+  always-long top-10.
+- Main model: calibrated logistic regression with time-decay weights.
 - Metrics: log loss, Brier, calibration, hit rate, Sharpe, max
-  drawdown, ROI vs SPY.
+  drawdown, ROI vs SPY; pooled + per-fold + yearly + bootstrap CI +
+  Deflated Sharpe.
 - Consumes `risk/` as a locked contract — no refactor of staking,
   entry, or limits when the model changes.
+- See **ADR 0014**.
 
-### 9. Models (`models/`) — planned M5–M6
+### 9. Models (`models/`) — M5–M6
 - Train, calibrate, and register models. Every run tracked in MLflow.
 
-### 10. Orchestration (`orchestration/`) — planned M7
+### 10. Orchestration (`orchestration/`) — M7
 - Prefect flows on a daily schedule after US market close.
+- Ephemeral mode (default) runs in-process; served mode uses
+  `flow.serve()` on a long-lived host. See **ADR 0016**.
 
-### 11. Monitoring (`monitoring/`) — planned M10
-- Data freshness, feature drift, prediction drift, rolling model
-  performance vs buy-and-hold.
+### 11. Monitoring (`monitoring/`) — M10
+- Three health signals: freshness, drift (PSI + KS), performance
+  (rolling metrics from the latest backtest run).
+- Read-only JSON report; no alerting (M7 webhook covers that);
+  no retraining. See **ADR 0019**.
 
-### 12. Dashboard (`app/`) — planned M10
-- Streamlit: pipeline health, backtest results, calibration, equity
-  curve vs SPY, drift.
+### 12. Dashboard (`app/`) — M10
+- Streamlit: pipeline health, backtest results, calibration,
+  equity curve vs SPY, drift. Single file, four tabs.
+- Public deployment on Streamlit Community Cloud renders from
+  committed synthetic sample data. See **ADR 0020**.
 
 ---
 
@@ -465,10 +500,72 @@ often than daily).
 
 ---
 
+## Data source terms
+
+This project consumes free public data. The terms of each source apply
+to any use of the code or derived artifacts.
+
+### yfinance (Yahoo Finance)
+
+- **Unofficial wrapper** around a public endpoint. There is no API
+  key, no SLA, and no support contract.
+- **Personal and research use only.** Redistribution of raw quotes is
+  not permitted by Yahoo's terms. This repository does **not**
+  redistribute price data; the raw layer is git-ignored and
+  regenerated locally.
+- Yahoo may change or remove the underlying endpoint at any time. The
+  ingestion client retries and backs off, but cannot guarantee
+  availability.
+- Reference: <https://github.com/ranaroussi/yfinance#legal-notice>
+
+### FRED and ALFRED (Federal Reserve Bank of St. Louis)
+
+- **Public data**, generally free to redistribute with attribution.
+- **API rate limits**: 120 requests/minute per API key. A free API key
+  is required (<https://fredaccount.stlouisfed.org/apikeys>). The
+  ingestion client enforces a lower cap.
+- **Vintage data via ALFRED** is fetched under the same API and terms.
+- Attribution: "This product uses the FRED® API but is not endorsed or
+  certified by the Federal Reserve Bank of St. Louis."
+- Reference: <https://fred.stlouisfed.org/legal/>
+
+### SEC EDGAR (US Securities and Exchange Commission)
+
+- **Public domain.** Company filings are US government works.
+- **Fair Access Policy** applies to programmatic access:
+  - Declare a `User-Agent` header identifying you and your contact
+    email. This project reads `SEC_USER_AGENT` from the environment
+    and refuses to start without it.
+  - **Rate limit: 10 requests/second maximum.** The client targets
+    6.7 req/s (a 30% margin).
+  - Do not make excessive requests; heavy use may result in an IP
+    block.
+- Reference: <https://www.sec.gov/os/accessing-edgar-data>
+
+### Streamlit Community Cloud
+
+- The demo dashboard is hosted on the **free tier**. No uptime SLA.
+  Apps spin down after ~7 days of inactivity; the first request
+  after that takes ~30 seconds (cold start).
+- Public by default. No secrets are stored in the app.
+- Reference: <https://streamlit.io/cloud>
+
+### Attribution in derived work
+
+If you fork this project or publish results derived from it, please:
+
+- Keep the ADR set (or a clear pointer to it) so the design decisions
+  remain traceable.
+- Retain the FRED attribution above.
+- Publish your own `SEC_USER_AGENT` in any deployment; do not reuse
+  the placeholder.
+
+---
+
 ## Quickstart
 
-**Requirements:** Python 3.11, Make. Docker is optional and only
-relevant once M8 lands (currently scaffolded, not functional).
+**Requirements:** Python 3.11, Make. Docker is optional and functional
+(see [M8](#m8--docker--make-up-in-one-page)).
 
 ```bash
 git clone https://github.com/WoodinGlass/data-backtest-pipeline.git
@@ -477,10 +574,6 @@ cd data-backtest-pipeline
 cp .env.example .env
 make setup-dev
 ```
-
-> **Note:** the `make up` target (Docker-based, one-command
-> reproducibility) is planned for M8 and is scaffolded but not yet
-> functional. Use `make setup-dev` for local development.
 
 Useful commands:
 
@@ -499,13 +592,28 @@ make features       # build the feature table (M4)
 make ci             # run the full CI suite locally
 make setup-dev      # one-command resumable environment setup
 make backtest       # run the walk-forward backtest (M5)
+make monitor        # run the monitoring report (M10)
 make app            # start the Streamlit dashboard (M10)
+make up             # Docker: build + start worker (M8)
+make pipeline       # Docker: run the full pipeline in a throwaway container
 ```
 
 **Colab users:** run `scripts/setup_dev.py` (or `make setup-dev`).
 It is idempotent and resumable: state is checkpointed to
 `data/.setup_state.json`, so a restart during the ~15 minute macro
 ingest does not force a full re-run.
+
+**Run the full pipeline locally.** The sequence is:
+
+```bash
+make ingest ingest-macro ingest-sec   # ~15-45 min depending on network
+make dbt-build quality features       # ~2 min
+make backtest --mlflow                # walk-forward + tracking
+make monitor                          # freshness + drift + performance
+make app                              # dashboard (reads your data/, not the demo)
+```
+
+`make pipeline` runs all of this in one command inside Docker.
 
 ---
 
@@ -587,21 +695,23 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 │   ├── limits.py       #   stop-loss, cooldown, DD derisk, DD halt
 │   └── _archive/       #   prior-design files, git-ignored, local only
 ├── backtest/           # walk-forward, metrics (M5)
-├── models/             # train, calibrate, registry (M5–M6)
+├── tracking/           # MLflow logger + registry (M6)
 ├── orchestration/      # Prefect flows (M7)
-├── monitoring/         # drift, freshness, model performance (M10)
 ├── app/                # Streamlit dashboard (M10)
+├── monitoring/         # drift, freshness, model performance (M10)
+├── data_demo/          # committed synthetic sample for Streamlit Cloud (M12)
 ├── config/             # universe.txt, macro_series*.yml,
 │                       # fundamental_tags.yml, sec_skip_tickers.yml
 ├── scripts/            # setup_dev.py, checkpoint.py, fixtures,
-│                       # cleanup_*_raw.py, sync_*_var.py
+│                       # make_demo_data.py, cleanup_*_raw.py
 ├── tests/
 │   ├── unit/           # pure, no external services
 │   ├── integration/    # needs network or a warehouse
 │   └── fixtures/       # committed tiny Parquet fixture for CI
-├── docs/               # ADR 0001–0020, data dictionary, runbook
-├── .github/workflows/  # CI: lint-and-test + dbt-build + quality
-├── Dockerfile  docker-compose.yml  Makefile
+├── docs/               # ADR 0001–0020, data dictionary, runbook,
+│                       # research_summary
+├── .github/workflows/  # CI: lint-and-test + dbt-build + docker-build
+├── Dockerfile  docker-compose.yml  Makefile  requirements.txt
 └── pyproject.toml  .pre-commit-config.yaml
 ```
 
@@ -611,23 +721,28 @@ Dependencies live in `pyproject.toml` with self-contained extras:
 
 | Tier | Count | Scope | Marker |
 |---|---|---|---|
-| Unit (pytest) | ~390 | Pure functions, no external services (default) | none |
+| Unit (pytest) | ~500 | Pure functions, no external services (default) | none |
 | Integration (pytest) | 10 | Needs network or a warehouse | `@pytest.mark.integration` |
 | dbt tests (schema + singular) | ~99 | Column-level + SQL checks | — |
 | Slow | — | Long-running backtests | `@pytest.mark.slow` |
 
-Breakdown of the ~390 unit tests:
+Breakdown of the ~500 unit tests:
 
 | Area | Count | Notes |
 |---|---|---|
 | Risk framework | 104 | `tests/unit/test_risk_*.py` |
-| Ingestion, quality, features, misc | ~286 | everything else |
+| Backtest framework | ~130 | `tests/unit/test_backtest_*.py` |
+| Tracking | 78 | `tests/unit/test_tracking_*.py` |
+| Orchestration | 88 | `tests/unit/test_orchestration_*.py` |
+| Monitoring | 79 | `tests/unit/test_monitoring_*.py` |
+| Ingestion, quality, features, misc | ~30 | everything else |
 
 Key tests:
 - **Anti-leakage (prices):** features for date `t` never change when future rows are shuffled.
 - **Anti-leakage (macro):** no value in `int_macro_daily` originates from a vintage later than the trade date.
 - **Anti-leakage (fundamental):** no fact originates from a filing whose `filed > trade_date`.
 - **Anti-look-ahead (risk):** prefix stability + poison-future probes across the full `entry → staking → limits` pipeline.
+- **Anti-look-ahead (backtest):** fold 0 predictions unchanged when future data is removed.
 - **Survivorship:** universe membership is date-aware; delisted tickers remain.
 - **Idempotency:** running ingestion twice does not duplicate rows.
 - **dbt tests:** `not_null`, `unique`, `relationships`, source freshness.
@@ -639,40 +754,43 @@ Key tests:
 
 ## CI/CD
 
-GitHub Actions runs on every push and pull request. Two jobs run in
+GitHub Actions runs on every push and pull request. Three jobs run in
 parallel:
 
 **`lint-and-test`** (Python):
-1. Install dependencies (`pip install -e ".[dev,quality]"`)
+1. Install dependencies (`pip install -e ".[dev,quality,backtest]"`)
 2. Lint (ruff) and format check
 3. Type-check (mypy, strict)
-4. Unit tests (`pytest -m "not integration and not slow"`)
+4. Unit tests + coverage (`pytest -m "not integration and not slow" --cov --cov-fail-under=70`)
 
 **`dbt-build`** (SQL / warehouse):
 1. Install `dbt-core` + `dbt-duckdb` + Pandera
 2. `dbt deps` (install `dbt_utils`)
-3. `dbt build` **against committed fixtures**
-   (`tests/fixtures/raw/prices/yfinance/` and
-   `tests/fixtures/raw/macro/fred/`)
-4. **Quality gate** (`python -m quality.cli --tickers-from-raw
-   --skip sec --skip stg_sec --skip int_fundamentals --skip stg_macro
-   --skip int_macro`) validates what the fixture covers
+3. `dbt build` **against committed fixtures** (`tests/fixtures/raw/`)
+4. **Quality gate** validates what the fixture covers
 5. Quality report uploaded as a CI artifact
 
-The fixtures are tiny, deterministic subsets of the raw layers (3
+**`docker-build`** (container):
+1. Build the image with Buildx + GitHub Actions cache
+2. Smoke import inside the container
+3. Smoke orchestration CLI
+4. Assert non-root user and executable entrypoint
+
+Fixtures are tiny, deterministic subsets of the raw layers (3
 tickers × 21 days; 4 macro series). CI is fully hermetic: no network,
 no yfinance, no FRED, no SEC EDGAR, identical results on every run.
 
-Merges are blocked if either job fails. Commits follow
+Merges are blocked if any job fails (branch protection, see
+`docs/runbook.md`). Commits follow
 [Conventional Commits](https://www.conventionalcommits.org/).
 
 ---
 
 ## Bugs caught before production
 
-Nine critical bugs were caught **before** they reached the model.
-This is the real value of the three-layer defense, the immutable
-audit trail, and the anti-look-ahead tests.
+Eleven critical bugs were caught **before** they reached a real
+backtest. This is the real value of the three-layer defense, the
+immutable audit trail, and the anti-look-ahead tests.
 
 | Bug | Root cause | Fix | Universal lesson |
 |---|---|---|---|
@@ -683,8 +801,10 @@ audit trail, and the anti-look-ahead tests.
 | XBRL tag unstable across eras | ASC 606 changed revenue tags ~2018 | Coalesce multiple tags; use `NetIncomeLoss` for era checks | Regulation can change vendor schema |
 | SPY 404 | ETFs do not file `companyfacts` | `config/sec_skip_tickers.yml` | Not every ticker is a company |
 | CI fixture glob not overridden | Anchor-based patch was fragile | Regex force-replace at runtime | Anchor-based patches are brittle |
-| Risk limits output out of order | Restore key used index **labels**, not positions | Use positional counter `range(len)` | Non-default index exposes latent bugs (caught by `test_row_order_matches_input`) |
+| Risk limits output out of order | Restore key used index **labels**, not positions | Use positional counter `range(len)` | Non-default index exposes latent bugs |
 | Risk validator too strict | Rejected `stop_loss_pct` deeper than `dd_halt_trigger` | Only enforce `dd_derisk < dd_halt` (the real invariant) | Not every numeric ordering is a hard invariant |
+| `register_model` failed on MLflow 3.x | MLflow 3 defaults to `skops`, which rejects `numpy.dtype` | Pass `skops_trusted_types=["numpy.dtype"]`, use `name=` not `artifact_path=` | Library defaults change between major versions |
+| `get_git_info` raised outside a repo | No `try/except` around `get_repo_root()` | Best-effort git helpers; pass `repo_root` explicitly | Monitoring code must survive running from anywhere |
 
 Full changelog in `CHANGELOG.md`. ADRs in `docs/adr/`.
 
@@ -695,40 +815,48 @@ Full changelog in `CHANGELOG.md`. ADRs in `docs/adr/`.
 - **Structured JSON logs** with correlation IDs.
 - **Data freshness:** alert when latest `trade_date` in marts is
   stale; macro and fundamental freshness tracked separately.
-- **Drift:** feature distribution shift vs training window.
-- **Model performance:** rolling log loss, Brier, hit rate, Sharpe,
-  cumulative return vs SPY.
-- **Failure alerts:** sent from Prefect flows.
+- **Drift:** PSI + KS per numeric feature, reference vs current
+  window.
+- **Model performance:** rolling log loss, Brier, AUC, Sharpe over
+  the last N folds of the latest backtest run.
+- **Failure alerts:** sent from Prefect flows via webhook.
 
 Severity policy: schema violation → hard fail; freshness/volume →
 warning first; integrity check → soft fail.
+
+```bash
+make monitor         # text summary to stdout
+make monitor-json    # also write reports/monitoring.json
+```
 
 ---
 
 ## Results
 
-> To be filled in after M12. Claims about performance require
-> numbers.
+> **The walk-forward backtest has not been run end-to-end on real
+> market data in this environment.** The pipeline is code-complete and
+> unit-tested on synthetic data; the numbers below are placeholders to
+> be filled after `make pipeline` completes on a local machine with
+> network access. See `docs/research_summary.md` for the full protocol.
 
-| Model | Log loss | Brier | Hit rate | Sharpe | Max DD | ROI vs SPY |
-|---|---|---|---|---|---|---|
-| Naive 50/50 | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| Momentum (last return) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| Buy-and-hold SPY | — | — | — | [ ] | [ ] | 0.00 |
-| Prices-only model (calibrated) | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| Prices + macro + fundamental | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| Model | Log loss | Brier | AUC | Hit rate | Sharpe | Max DD | ROI vs SPY |
+|---|---|---|---|---|---|---|---|
+| Naive 50/50 | — | — | — | — | — | — | — |
+| Momentum (last return) | — | — | — | — | — | — | — |
+| Buy-and-hold SPY | — | — | — | — | — | — | 0.00 |
+| Prices-only model (calibrated) | — | — | — | — | — | — | — |
+| Prices + macro + fundamental | — | — | — | — | — | — | — |
 
-- Calibration curve: `docs/preview/calibration.png`
-- Cumulative returns vs SPY: `docs/preview/equity_curve.png`
+**Expected outcome (stated before observation):** AUC ≈ 0.50–0.53,
+log loss ≈ 0.690–0.693, Sharpe ≈ −0.3 to +0.5 after 5 bp round-trip
+costs, and likely **underperformance vs buy-and-hold SPY**. Daily
+equity direction is close to a martingale; a materially higher AUC
+would be a signal of a bug, not a triumph.
 
-**Honest reporting policy:** if the main model does not beat
-buy-and-hold, this table will say so. Likewise, if adding macro and
-fundamental features does not improve the model, that result will be
-reported — it is the expected outcome in daily equity direction
-prediction.
-
----
-
+**Honest reporting policy:** when the real run is complete, this
+table will be filled with the observed numbers — whatever they are.
+If the main model does not beat buy-and-hold, this README will say
+so. That is the expected result.
 
 ---
 
@@ -780,19 +908,6 @@ Locked contract: **ADR 0014**. All parameters live in
 - `backtest/report.py` — aggregate, bootstrap, deflated Sharpe, plots
 - `scripts/run_backtest.py` — CLI end-to-end (reads features + warehouse)
 
-### Test coverage
-
-| File | Tests | Focus |
-|---|---|---|
-| `test_backtest_config.py` | 17 | Defaults, validators, env override |
-| `test_backtest_split.py` | 18 | Add-months, fold generation, gap, overlap |
-| `test_backtest_metrics.py` | 24 | Classification, trading, bootstrap, deflated |
-| `test_backtest_baselines.py` | 16 | B0/B1/B2/B3, benchmark exclusion, NaN handling |
-| `test_backtest_model.py` | 15 | Time decay, imputation, single-class fallback |
-| `test_backtest_portfolio.py` | 22 | Rebalance band, cash, costs, benchmark exclusion |
-| `test_backtest_runner.py` | 18 | End-to-end, prefix stability, artifacts |
-| **Total** | **~130** | |
-
 ### Bug caught in M5
 
 **`risk/entry.py::_select_threshold` did not exclude benchmark rows.**
@@ -803,7 +918,6 @@ ADR 0013 §4. This was latent from M4.5 (test fixture had SPY at
 0.50, below the 0.55 threshold by coincidence) and was only exposed
 by the M5 integration test. Fixed by reusing `_eligible_mask`;
 regression test added to `tests/unit/test_risk_entry.py`.
-
 
 ---
 
@@ -819,45 +933,23 @@ For every `--mlflow` run, the walk-forward run is logged to the
 
 - **Params** (~54): `bt.*` (BacktestSettings), `risk.*` (RiskSettings),
   `git.sha` / `git.branch` / `git.dirty`, `env.python` / `env.platform`.
-- **Metrics** (~41): `pooled/*` (sharpe, auc, log_loss, brier, hit_rate,
-  cagr, max_drawdown, turnover, sharpe_ci_*), `deflated/*`
-  (sharpe_annualized, deflated_sharpe, n_trials), `agg/*` (median + IQR),
-  `baseline/<name>/*` (each baseline's pooled AUC + Sharpe), and
-  `fold/<id>/*` (per-fold Sharpe + AUC, capped).
+- **Metrics** (~41): `pooled/*`, `deflated/*`, `agg/*`,
+  `baseline/<name>/*`, `fold/<id>/*` (capped).
 - **Artifacts**: entire `data/backtest/{run_id}/` directory under
-  `backtest/`. Plus `meta/*.diff` (uncommitted git diff, truncated) and
-  `meta/*.txt` (pip freeze snapshot).
+  `backtest/`. Plus `meta/*.diff` (uncommitted git diff, truncated)
+  and `meta/*.txt` (pip freeze snapshot).
 
 ### Model Registry
 
 After the walk-forward run, `tracking.registry` refits one model on
-**all features** with the same `BacktestSettings` and registers it under
-`daily-direction-model`. Versions auto-increment. Aliases:
+**all features** with the same `BacktestSettings` and registers it
+under `daily-direction-model`. Versions auto-increment. Aliases:
 
 - `@challenger` — always points to the newest version.
 - `@champion` — never moved automatically; manual promotion only.
 
-The registry run is a **separate** MLflow run tagged `purpose=registry`,
-so the walk-forward run stays clean.
-
-### Modules
-
-- `tracking/config.py` — `TrackingSettings` (`DBP_TRACK_*` env prefix)
-- `tracking/client.py` — optional MLflow import, path resolution,
-  experiment setup, run context manager, git/env helpers
-- `tracking/logger.py` — params + metrics + artifacts logging
-- `tracking/registry.py` — refit on full data, register, alias mgmt
-- `tracking/cli.py` — `dbp-tracking list-runs | best-run | compare`
-
-### Test coverage
-
-| File | Tests |
-|---|---|
-| `test_tracking_config.py` | 27 |
-| `test_tracking_client.py` | 23 |
-| `test_tracking_logger.py` | 15 |
-| `test_tracking_registry.py` | 13 |
-| **Total** | **78** |
+The registry run is a **separate** MLflow run tagged
+`purpose=registry`, so the walk-forward run stays clean.
 
 ### CLI usage
 
@@ -879,26 +971,22 @@ mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
 
 ### Bug caught in M6
 
-**`register_model` failed on MLflow 3.x** — MLflow 3 changed the default
-serialization format to `skops`, which rejects `numpy.dtype` unless
-whitelisted. Fix: pass `skops_trusted_types=["numpy.dtype"]` and switch
-from deprecated `artifact_path=` to `name=`. Caught by the M6
-end-to-end smoke test against a live local MLflow.
+**`register_model` failed on MLflow 3.x** — MLflow 3 changed the
+default serialization format to `skops`, which rejects `numpy.dtype`
+unless whitelisted. Fix: pass `skops_trusted_types=["numpy.dtype"]`
+and switch from deprecated `artifact_path=` to `name=`.
 
-**`get_git_info` raised when cwd was not a repo.** Original code called
-`get_repo_root()` without a `try/except`; if the CLI was launched from
-a non-repo cwd (which happens when data is in `/tmp`), the whole
-`log_backtest_run` call failed. Fix: git helpers are now strictly
-best-effort, and the CLI passes `repo_root=REPO` explicitly.
-
+**`get_git_info` raised when cwd was not a repo.** Fix: git helpers
+are strictly best-effort, and the CLI passes `repo_root=REPO`
+explicitly.
 
 ---
 
 ## M7 — Prefect orchestration in one page
 
-Locked contract: **ADR 0016**. Wraps every pipeline stage (M1-M6) as a
-Prefect flow. No pipeline logic in the orchestration layer — each flow
-is a thin subprocess call to an existing CLI.
+Locked contract: **ADR 0016**. Wraps every pipeline stage (M1–M6) as
+a Prefect flow. No pipeline logic in the orchestration layer — each
+flow is a thin subprocess call to an existing CLI.
 
 ### Stage flows
 
@@ -922,82 +1010,40 @@ is a thin subprocess call to an existing CLI.
 
 ### Modes
 
-- **Ephemeral** (default): runs in-process. No Prefect server. Used by
-  Colab, CI, and `dbp-orchestrate run <flow>`.
+- **Ephemeral** (default): runs in-process. No Prefect server.
 - **Served**: registers schedules via `flow.serve()`. Used in Docker
-  (M8) on long-lived hosts.
+  on long-lived hosts.
 
 ### Retry + alerts
 
 - Every task retries **3 times** with delays `[10, 60, 300]` seconds.
 - On terminal failure: structured log + optional webhook POST (Slack
-  compatible). Webhook is best-effort — a failed alert never masks the
-  original failure.
+  compatible). Webhook is best-effort.
 - Configure with `DBP_ORCH_ALERT_WEBHOOK_URL`.
-
-### Modules
-
-- `orchestration/config.py` — `OrchestrationSettings` (`DBP_ORCH_*`)
-- `orchestration/_compat.py` — Prefect-optional `@flow`/`@task`
-- `orchestration/_subprocess.py` — `run_command` wrapper with logging
-- `orchestration/alerts.py` — payload builder, webhook poster, hook
-- `orchestration/deployments.py` — schedule registry + `serve_flows`
-- `orchestration/cli.py` — `dbp-orchestrate list | run | info | schedule`
-- `orchestration/flows/` — one module per stage + composites
 
 ### CLI
 
 ```bash
-# Inspect
 dbp-orchestrate list
 dbp-orchestrate info daily_refresh
 dbp-orchestrate schedule
-
-# Run (ephemeral)
 dbp-orchestrate run daily_refresh
 dbp-orchestrate run run_backtest --arg mlflow=true --arg bootstrap=500
 dbp-orchestrate run weekly_refresh --dry-run
-
-# Served mode (Docker, long-lived host)
-python -c "from orchestration.deployments import serve_flows; serve_flows()"
 ```
-
-### Test coverage
-
-| File | Tests |
-|---|---|
-| `test_orchestration_config.py` | 28 |
-| `test_orchestration_alerts.py` | 21 |
-| `test_orchestration_flows.py` | 23 |
-| `test_orchestration_cli.py` | 16 |
-| **Total** | **88** |
 
 ### Bug caught in M7
 
 **`get_repo_root` raised when the flow ran from outside the repo.**
-The same class of bug we fixed in M6 for git helpers; here it surfaced
-when the orchestration flows were tested from a temp directory. Fixed
-by letting `_resolve_repo_root` accept an explicit `settings.repo_root`
-and otherwise walking up from `Path.cwd()`. The flow subprocess `cwd`
-is always the resolved repo root.
-
-### Design notes
-
-- **No parallelism.** All composites are linear. Branching and fan-out
-  are out of scope; they would require an ADR amendment.
-- **`track_run` merged into `run_backtest`.** ADR 0016 §4 originally
-  listed a separate `track_run` flow. In practice, tracking is a flag
-  (`--mlflow`) on `run_backtest`, so a second flow would have to share
-  a `RunResult` across process boundaries. Merged for simplicity.
-
+Same class as the M6 git-helper bug. Fixed by allowing
+`settings.repo_root` override and walking up from `Path.cwd()`.
 
 ---
 
 ## M8 — Docker + `make up` in one page
 
 Locked contract: **ADR 0017**. A single `make up` takes a clean
-checkout to a running pipeline container. No local Python, no
-system library install, no environment troubleshooting.
+checkout to a running pipeline container.
 
 ### Two commands from zero
 
@@ -1008,27 +1054,17 @@ cp .env.example .env      # edit if you have a FRED key
 make up
 ```
 
-What `make up` does:
-
-1. `docker compose build` — builds the pipeline image (Python 3.11-slim,
-   non-root user, ~500 MB, ~3 min cold).
-2. `docker compose up -d` — starts the `worker` container. It idles
-   (`sleep infinity`) so you can `make shell` in.
-3. On container start, `scripts/docker_entrypoint.sh` runs a minimal
-   bootstrap: creates `data/`, `mlruns/`, `reports/`, verifies the
-   package is importable, warns if `.env` is missing.
-
 ### Common commands
 
 | Command | What it does |
 |---|---|
 | `make up` | Build + start the worker (background) |
-| `make down` | Stop and remove containers (state persists on host) |
+| `make down` | Stop and remove containers (state persists) |
 | `make logs` | Tail worker logs |
 | `make shell` | Interactive bash inside the worker |
 | `make run CMD='...'` | Run one shell command in the worker |
 | `make pipeline` | Full pipeline once in a throwaway container |
-| `make orchestrate FLOW=daily_refresh` | Run a Prefect flow (M7) |
+| `make orchestrate FLOW=daily_refresh` | Run a Prefect flow |
 | `make prefect-up` | Also start the Prefect server (profile `served`) |
 
 ### Persistence
@@ -1038,89 +1074,52 @@ State lives **on the host**, not in the container:
 | Host directory | Contents |
 |---|---|
 | `./data` | Raw layer, DuckDB warehouse, features, backtest runs |
-| `./mlruns` | MLflow SQLite + artifacts (M6) |
-| `./reports` | Quality gate JSON reports |
-
-`docker compose down` removes containers but leaves state. A fresh
-`make up` picks up where you left off.
+| `./mlruns` | MLflow SQLite + artifacts |
+| `./reports` | Quality gate + monitoring JSON reports |
 
 ### What is NOT in the image
 
-- **No source-of-truth state.** The image is built from source at
-  commit time; the persistent state is a bind mount.
-- **No secrets.** `.env` is loaded by Compose as environment
-  variables (`env_file.required: false`) — it is **not**
-  bind-mounted and never lands in a layer.
-- **No network exposure.** The worker publishes no ports. Only
-  the optional `prefect-server` exposes `:4200`.
-- **No root.** Container runs as UID 1000 (`app`).
-
-### Design notes
-
-- **Single-stage build.** Multi-stage adds complexity for a project
-  this size. If the image grows past ~800 MB, that is revisited.
-- **Cache-friendly deps.** `pyproject.toml` is copied first, then a
-  stub-package install warms the dependency layer. Source-only
-  changes rebuild in ~5 seconds.
-- **`tini` as PID 1.** Signal forwarding without custom code.
-- **Colab cannot run Docker.** M8 ships **statically verified
-  files** (YAML parse, Dockerfile parse, `bash -n`, `make -n`).
-  End-to-end `make up` is verified on a local machine; see
-  `docs/runbook.md` for the acceptance test.
-
+- **No source-of-truth state** (bind-mounted).
+- **No secrets** (`.env` loaded as env vars, never in a layer).
+- **No network exposure** (worker publishes no ports).
+- **No root** (UID 1000 `app`).
 
 ---
 
 ## M9 — CI contract in one page
 
-Locked contract: **ADR 0018**. Every merge to `main` was green on
-all required checks. The contract lives in
-`.github/workflows/ci.yml` and `docs/adr/0018-ci-contract.md`.
+Locked contract: **ADR 0018**. Three parallel jobs, each with its own
+timeout, plus branch protection documented in the runbook.
 
-### Three parallel jobs
+### Jobs
 
 | Job | Runs | Timeout | Blocking |
 |---|---|---|---|
 | `lint-and-test` | ruff + mypy + pytest + coverage floor | 15 min | **yes** |
 | `dbt-build` | dbt build (fixture) + quality gate | 15 min | **yes** |
-| `docker-build` | image build + 3 smokes (import, CLI, non-root entry) | 20 min | **yes** |
-
-Wall-clock target: **≤ 6 minutes** on GitHub-hosted runners when
-cache is warm.
+| `docker-build` | image build + smokes | 20 min | **yes** |
 
 ### Coverage floor
 
-`pytest --cov --cov-fail-under=70`. Baseline is 78% on a full local
-environment; the 8-point buffer absorbs CI differences (MLflow and
-Prefect are not installed in CI, so their test suites skip
-gracefully via the optional-import guards).
+`pytest --cov --cov-fail-under=70`. Baseline is ~78% on a full local
+environment; the buffer absorbs CI differences (MLflow and Prefect
+are not installed in CI, so their test suites skip gracefully).
 
-Raising the floor is a **deliberate** action: any bump must be
-recorded as an amendment to ADR 0018 in the same PR.
+### Branch protection
 
-### Required status checks (branch protection)
-
-GitHub repository settings — not files — enforce merge blocking.
-Exact clicks are in `docs/runbook.md`. The contract:
-
+Configured in GitHub Settings (see runbook):
 - `main` is protected. Direct push disabled.
-- Every change (including the maintainer's) goes through a PR.
+- Every change goes through a PR.
 - All three CI jobs are **required status checks**.
 - Stale reviews dismissed on new commits.
-- Conversations must be resolved before merge.
 
 ### Dependabot
 
-Weekly PRs for `pip` and `github-actions`. Grouped per ecosystem
-(`runtime` vs `dev`). Auto-merge is **not** enabled — every bump is
-a deliberate decision. Major bumps of `mlflow`, `prefect`, and
-`pandera` are ignored by config; those are bumped by hand.
+Weekly PRs for `pip` and `github-actions`, grouped per ecosystem.
+Auto-merge is **not** enabled. Major bumps of `mlflow`, `prefect`,
+and `pandera` are ignored by config; those are bumped by hand.
 
 ### Local mirror
-
-`make ci` runs the same steps as the GitHub `lint-and-test` +
-`dbt-build` jobs. `make ci-docker` runs the `docker-build` job.
-`make ci-full` runs everything.
 
 ```bash
 make ci         # lint + type + test + coverage + dbt + quality
@@ -1128,32 +1127,13 @@ make ci-docker  # docker build + smoke imports (requires Docker)
 make ci-full    # both
 ```
 
-### PR template
-
-Four prompts in `.github/pull_request_template.md`: what changed,
-which milestone, how it was tested, ADR amendment required. Enough
-to force clarity, not so many that the prompts get deleted.
-
-### Notes
-
-- CI is **hermetic**: no network, no secrets, deterministic.
-  `dbt build` runs against committed fixtures under
-  `tests/fixtures/raw/`.
-- CI does **not** run integration tests (`-m integration`) or
-  deploy. Those are out of scope for M9.
-- The `docker-build` job builds the image but does **not** start
-  the compose stack. Building the image is the contract; running
-  the pipeline in Docker is a user action.
-
-
 ---
 
 ## M10 — Monitoring + Streamlit in one page
 
-Locked contract: **ADR 0019**. Three health signals (freshness, drift,
-performance), one JSON report, one read-only dashboard. No alerting
-(M7 webhook already covers failure notification), no retraining, no
-persistent metrics store.
+Locked contract: **ADR 0019**. Three health signals, one JSON report,
+one read-only dashboard. No alerting, no retraining, no persistent
+metrics store.
 
 ### Three signals
 
@@ -1176,128 +1156,76 @@ Per-mart `MAX(trade_date)` vs threshold (calendar days):
 
 ### Drift
 
-Two numbers per numeric feature: **PSI** (bucketed distribution
-distance) and **KS** (Kolmogorov-Smirnov p-value). Reference window =
-first 60 trading days of the feature table; current window = last 60.
-A feature is flagged when PSI ≥ 0.25 **or** KS p-value ≤ 0.01.
+PSI (bucketed distribution distance) and KS p-value per numeric
+feature. Reference = first 60 trading days; current = last 60. A
+feature is flagged when PSI ≥ 0.25 **or** KS p-value ≤ 0.01.
 
 ### Performance
 
-Rolling mean over the last `perf_window_folds` (default 4) of the M5
-backtest metrics: log loss, Brier, AUC, Sharpe. Thresholds are loose
-by design — monitoring flags obvious degradation, not normal noise.
+Rolling mean over the last 4 folds of the M5 backtest metrics.
 
-### One report, one command
+### Dashboard
 
 ```bash
-make monitor           # print text summary
-make monitor-json      # also write reports/monitoring.json
-python -m monitoring.cli info     # print thresholds
-python -m monitoring.cli schema   # print report schema
+make app               # local (reads your data/)
 ```
 
-Exit code is 0 for PASS/WARN, 1 for FAIL if `--fail-on-fail` is set.
-
-### Streamlit dashboard
-
-```bash
-make app               # or: streamlit run app/streamlit_app.py
-```
-
-Four tabs:
-
-| Tab | Content |
-|---|---|
-| **Health** | Overall status, freshness table, latest run |
-| **Backtest** | Pooled metrics, deflated Sharpe, equity + calibration plots |
-| **Drift** | PSI + KS per feature, two bar charts |
-| **About** | Repo links, ADR list, runtime info |
-
-The dashboard reads from `monitoring.*` — it never parses Parquet
-directly. One source of truth for each metric.
-
-### Modules
-
-- `monitoring/config.py` — `MonitoringSettings` (`DBP_MON_*`)
-- `monitoring/freshness.py` — pure, one mart at a time
-- `monitoring/drift.py` — pure, PSI + KS
-- `monitoring/performance.py` — pure, rolling window
-- `monitoring/report.py` — the only IO edge
-- `monitoring/cli.py` — `dbp-monitor run | schema | info`
-- `app/streamlit_app.py` — single-file dashboard
-
-### Test coverage
-
-| File | Tests |
-|---|---|
-| `test_monitoring_config.py` | 21 |
-| `test_monitoring_freshness.py` | 17 |
-| `test_monitoring_drift.py` | 22 |
-| `test_monitoring_performance.py` | 19 |
-| **Total** | **79** |
-
-### Design notes
-
-- **Pure functions everywhere except `report.py`.** All three checkers
-  are testable without a warehouse; `report.py` is the only place that
-  reads or writes files.
-- **Failure isolation.** Each section is wrapped in try/except; a
-  broken section records an error in `report["errors"]` and does not
-  abort the others.
-- **Missing backtest run = FAIL, not skip.** A monitored pipeline that
-  has never produced a metrics file is a real problem. Same for
-  missing warehouse — freshness goes FAIL.
-- **Drift with insufficient data = PASS with reason.** We cannot
-  measure drift from 30 days; flagging it as failure would be noise.
-
+Four tabs: Health, Backtest, Drift, About. The public deployment at
+<https://data-backtest-pipeline.streamlit.app/> renders from
+`data_demo/` (synthetic), because the real `data/` is git-ignored.
 
 ---
 
-## M12 - Deployment and research summary in one page
+## M11 — Documentation finalization
 
-Locked contract: **ADR 0020**. The project ships two public
-artifacts: a Streamlit Cloud dashboard rendered from **synthetic**
-demo data, and a paper-like summary in `docs/research_summary.md`.
+- `docs/adr/README.md` — index of all ADRs, grouped by theme, with
+  reading order for new contributors.
+- `docs/data_dictionary.md` — every table, column, and artifact,
+  grouped by layer.
+- `CHANGELOG.md` — restructured to per-milestone version headings
+  (`0.6.0` → `0.12.0`), Keep a Changelog format.
+- `README.md` — final pass; stale progress counters and ADR ranges
+  corrected.
+
+No code changes.
+
+---
+
+## M12 — Deployment and research summary in one page
+
+Locked contract: **ADR 0020**. Two public artifacts: a Streamlit
+Community Cloud dashboard rendered from **synthetic** demo data, and
+a paper-like summary in `docs/research_summary.md`.
 
 ### Public dashboard
 
-Deployed on Streamlit Community Cloud. URL: *(see
-`docs/runbook.md` "Streamlit Cloud deployment" for the current
-link after deploy)*.
+**URL:** <https://data-backtest-pipeline.streamlit.app/>
 
-The dashboard reads from `data_demo/` when the real `data/` is
-absent. A prominent **DEMO DATA** banner appears on every tab.
+Renders from `data_demo/` when `data/` is absent. A prominent
+**DEMO DATA** banner appears on every tab.
 
 ```bash
-make app          # local
-python scripts/make_demo_data.py   # regenerate sample data
+make app                            # local, uses your data/
+python scripts/make_demo_data.py    # regenerate demo sample
 ```
 
 ### Research summary
 
-`docs/research_summary.md` follows a research-paper structure:
-
-- Abstract, problem statement, data, features, model, risk,
-  methodology, results, limitations, conclusion, reproduction,
-  references.
-- The **Results** section states **expected outcomes first**
-  (AUC 0.50-0.53, Sharpe near zero after cost, likely
-  underperformance vs SPY) and leaves **observed outcomes** as an
-  explicit placeholder to be filled after a local run. Writing the
-  expectation first means it cannot be retrofitted to whatever the
-  numbers end up being.
+`docs/research_summary.md` follows a research-paper structure and
+states **expected outcomes first** (AUC 0.50–0.53, Sharpe near zero
+after cost, likely underperformance vs SPY), leaving **observed
+outcomes** as an explicit placeholder to be filled after a local run.
+Writing the expectation first means it cannot be retrofitted to
+whatever the numbers end up being.
 
 ### What M12 does not do
 
-- Does **not** run the full pipeline in the cloud. yfinance +
-  FRED + ALFRED + SEC ingest takes 30-60 minutes and depends on
-  external APIs. The Cloud host is for presentation, not compute.
-- Does **not** include real market data in the repo. All numbers
-  on the public dashboard are synthetic and labeled as such.
-- Does **not** provide a VPS deployment. Documented as an
-  alternative in `docs/runbook.md` but not built.
-- Does **not** verify the deploy in CI. The Streamlit Cloud
-  deploy is a UI action; verification is a manual checklist.
+- Does **not** run the full pipeline in the cloud (30–60 min, external APIs).
+- Does **not** include real market data in the repo (synthetic demo only).
+- Does **not** provide a VPS deployment (documented as an alternative).
+- Does **not** verify the deploy in CI (manual checklist in the runbook).
+
+---
 
 ## Limitations
 
@@ -1306,25 +1234,24 @@ python scripts/make_demo_data.py   # regenerate sample data
 - **Survivorship, look-ahead, and vintage bias are enemies #1, #2,
   and #3.** We address all three explicitly, but no mitigation is
   perfect.
+- **The full pipeline has not been run end-to-end on real data in
+  the development environment.** Code is complete; observation is
+  pending. See [Development status](#development-status).
 - `yfinance` is convenient but not production-grade: partial data,
   throttling, occasional revisions.
 - FRED and ALFRED occasionally correct their own archives; we treat
   corrections as new snapshots.
 - **Macro ingest remains slow** (~15 min full universe) even after
-  promoting 45 daily series to latest-mode. The remaining cost is the
-  95 full-vintage series, which is the correct trade-off — those
-  series are actually revised.
+  promoting 45 daily series to latest-mode.
 - SEC EDGAR XBRL coverage varies by sector. Some tags (e.g.
   `InventoryNet`) apply to retailers but not banks. Downstream
   features must tolerate NULLs.
 - **XBRL tag stability varies across eras.** Revenue tags changed
-  around 2018 with ASC 606; feature builders must coalesce multiple
-  tags for a single semantic series.
+  around 2018 with ASC 606.
 - Employee count extraction from 10-K text is best-effort; coverage
   target is 60–80%, reported by the quality gate.
 - **XOM history is limited** — its ticker currently resolves to a
-  2024 reorganization entity with facts only from mid-2026. Union of
-  pre- and post-reorg CIKs is future work.
+  2024 reorganization entity with facts only from mid-2026.
 - **Risk framework is v1.** Derisk and halt are not independent:
   once derisk halves exposure, halt may never trigger. This is by
   design; set `dd_derisk_factor=1.0` to disable derisk scaling.
@@ -1340,10 +1267,12 @@ python scripts/make_demo_data.py   # regenerate sample data
 
 ## Documentation
 
-- `docs/adr/`: architecture decision records (0001–0020)
-- `docs/data_dictionary.md`: tables, columns, meanings
-- `docs/runbook.md`: three most common failures
-- `CHANGELOG.md`: notable changes
+- `docs/adr/` — architecture decision records (0001–0020), index in
+  `docs/adr/README.md`
+- `docs/data_dictionary.md` — tables, columns, meanings
+- `docs/runbook.md` — failure triage and deployment procedures
+- `docs/research_summary.md` — paper-like project summary
+- `CHANGELOG.md` — notable changes
 
 ---
 
@@ -1360,9 +1289,9 @@ python scripts/make_demo_data.py   # regenerate sample data
 
 ## Roadmap
 
-Progress: **19 / 19 milestones selesai**.. Fokus berikutnya: **M9 (CI/CD lengkap) lalu M10 (monitoring)**.
+Progress: **19 / 19 milestones complete.**
 
-### ✅ Selesai
+### ✅ Complete
 
 - [x] **M1:** Idempotent ingestion (retry, backoff, immutable raw Parquet layer)
 - [x] **M2:** dbt staging + marts with `not_null`, `unique`, `relationships`, source freshness
@@ -1374,10 +1303,7 @@ Progress: **19 / 19 milestones selesai**.. Fokus berikutnya: **M9 (CI/CD lengkap
 - [x] **M3.9:** Quality gate extension for macro + fundamental layers
 - [x] **M3.9.5:** Daily-series optimization (latest-mode expansion)
 - [x] **M4:** Point-in-time features (prices + macro + fundamental), anti-leakage tests
-- [x] **M4.5:** Risk framework — staking (quarter-Kelly), entry rules, stop-loss, drawdown halt (ADR 0013)
-
-### 🚧 Berikutnya
-
+- [x] **M4.5:** Risk framework — staking, entry rules, stop-loss, drawdown halt (ADR 0013)
 - [x] **M5:** Walk-forward backtest, baseline vs main model, metrics + calibration (ADR 0014)
 - [x] **M6:** MLflow tracking (parameters, metrics, artifacts, model versions) (ADR 0015)
 - [x] **M7:** Prefect orchestration with failure alerts (ADR 0016)
@@ -1385,7 +1311,7 @@ Progress: **19 / 19 milestones selesai**.. Fokus berikutnya: **M9 (CI/CD lengkap
 - [x] **M9:** CI/CD: lint, pytest, `dbt build` on sample, merge blocking (ADR 0018)
 - [x] **M10:** Monitoring (drift, freshness, model performance) + Streamlit dashboard (ADR 0019)
 - [x] **M11:** Documentation: README, data dictionary, runbook, ADRs
-- [x] **M12:** Deployment (Streamlit Cloud/VPS) + research-style results summary (ADR 0020)
+- [x] **M12:** Deployment (Streamlit Cloud) + research-style results summary (ADR 0020)
 
 ---
 
