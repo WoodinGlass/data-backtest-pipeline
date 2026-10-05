@@ -59,10 +59,19 @@ def _resolve_roots() -> tuple[Path, Path, Path, bool]:
 # ---------------------------------------------------------------------
 
 
-@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner="Building monitoring report...")
+@st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner="Loading monitoring report...")
 def get_report(reference_date: str | None = None) -> dict[str, Any]:
-    """Build the monitoring report (cached)."""
-    warehouse, features, backtest_dir, _is_demo = _resolve_roots()
+    """Load the monitoring report.
+
+    In demo mode, prefer the committed data_demo/monitoring_demo.json
+    (a curated snapshot). Otherwise, build it live from the real
+    data/ tree. See ADR 0020 section 2-3.
+    """
+    warehouse, features, backtest_dir, is_demo = _resolve_roots()
+    if is_demo:
+        demo_json = REPO_ROOT / "data_demo" / "monitoring_demo.json"
+        if demo_json.exists():
+            return json.loads(demo_json.read_text())
     settings = MonitoringSettings(
         reference_date=reference_date,
         warehouse_path=str(warehouse),
