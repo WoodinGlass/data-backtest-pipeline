@@ -75,3 +75,9 @@ risk/_archive/
 # Streamlit secrets
 .streamlit/secrets.toml
 !.streamlit/secrets.toml.example
+
+# Demo data (committed despite *.parquet / data/ ignores)
+!data_demo/
+!data_demo/**
+!data_demo/**/*.parquet
+!data_demo/*.parquet
